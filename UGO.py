@@ -11,7 +11,7 @@
 #
 #Note:
 #	The current implentation can possibly mess up the files stored in Section #2, but will do for most needs
-#	Next version will bring a big change in the ugoxml format
+#	Next version will probably bring a big change in the ugoxml format
 #
 import sys, os
 from base64 import b64encode, b64decode
@@ -136,7 +136,7 @@ class UGO:
 				self.Items.append(("topscreen text", labels, num))
 				continue
 			elif type == 2:#catogories(like "reccomended" and "new flipnotes" and "most popular")
-				#this one may change greatly depending on what layout is set in type==0
+				#this one may visually change greatly depending on what layout is set in type==0
 				
 				link = i[1]
 				label = b64decode(i[2]).decode("UTF-16LE")
@@ -144,8 +144,12 @@ class UGO:
 				
 				self.Items.append(("category", link, label, selected))
 				continue
-			elif type == 3:#POST button? "Post Flipnote"
-				pass
+			elif type == 3:#POST button/link to POST form. "Post Flipnote" uses this
+				link = i[1]
+				label = b64decode(i[2]).decode("UTF-16LE")
+				
+				self.Items.append(("post", link, label))
+				continue
 			elif type == 4:#Button
 				link = i[1]
 				trait = int(i[2])
@@ -266,9 +270,13 @@ class UGO:
 				selected = str(1*selected)
 				
 				TableOfContents.append("\t".join(("2", link, label, selected)))
-			elif i[0] == "post":#not yet implented
-				pass
-			elif i[0] == "button":
+			elif i[0] == "post":#3
+				link, label = i[1:]
+				
+				label = b64encode(label.encode("UTF-16LE"))
+				
+				TableOfContents.append("\t".join(("3", link, label)))
+			elif i[0] == "button":#4
 				trait, label, link, other, file = i[1:]
 				
 				trait = str(trait)
@@ -313,7 +321,7 @@ class UGO:
 		
 		for i in self.Items:
 			if   i[0] == "unknown":
-				elem = ET.SubElement(ugo_xml, "unknown", type=i[1][0])
+				elem = ET.SubElement(ugo_xml, "raw", type=i[1][0])
 				for value in i[1][1:]:
 					ET.SubElement(elem, "value").text = value
 				continue
@@ -339,7 +347,11 @@ class UGO:
 				ET.SubElement(elem, "address").text = link
 				ET.SubElement(elem, "selected").text = str(selected).lower()
 			elif i[0] == "post":#3
-				pass#not yet implented/parsed
+				elem = ET.SubElement(ugo_xml, "post")
+				link, label = i[1:]
+				
+				ET.SubElement(elem, "label").text = label
+				ET.SubElement(elem, "address").text = link
 			elif i[0] == "button":#4
 				elem = ET.SubElement(ugo_xml, "button")
 				trait, label, link, other, file = i[1:]
@@ -377,9 +389,9 @@ class UGO:
 		
 		Items = []
 		for elem in ugo_xml:
-			if elem.tag == "unknown":
+			if elem.tag == "raw":
 				if "type" not in elem.attrib:
-					if not silent: print "Invalid formatting. <unknown> without \"type\" attribute"
+					if not silent: print "Invalid formatting. <raw> without \"type\" attribute"
 					return False
 				values = [elem.attrib["type"]]
 				for value in elem:
@@ -454,8 +466,27 @@ class UGO:
 						selected = value.text[0].lower() in "t1"
 				
 				Items.append(("category", link, label, selected))
-			elif elem.tag == "post":#3 not yet implented
-				pass
+			elif elem.tag == "post":#3
+				label = None
+				link = None
+				
+				for value in elem:
+					if value.tag == "label":
+						if isinstance(label, str):
+							if not silent: print "Invalid formatting. Multible <label> within <post>"
+							return False
+						label = value.text if value.text else ""
+					elif value.tag == "address":
+						if isinstance(link, str):
+							if not silent: print "Invalid formatting. Multible <address> within <post>"
+							return False
+						link = value.text if value.text else ""
+				
+				if None in (link, label):
+					if not silent: print "Invalid formatting. <button> lacks either a <address> or <label>"
+					return False
+				
+				Items.append(("post", link, label))
 			elif elem.tag == "button":#4
 				trait = None#todo: add names
 				label = None
@@ -523,9 +554,9 @@ if __name__ == "__main__":
 	print "              ==       v0.92      =="
 	print
 	
-	if len(sys.argv) < 3:
+	if len(sys.argv) < 2:
 		print "Usage:"
-		print "      UGO.py <mode> <input> [<output> [<foldername>]]"
+		print "      UGO.py [<mode>] <input> [<output> [<foldername>]]"
 		print ""
 		print "      <Mode>:"
 		print "          -d: Converts the UGO file in <input> to a UGOXML file with the same"
@@ -535,12 +566,27 @@ if __name__ == "__main__":
 		print "              <foldername> is relative to the XML."
 		print "          -e: Converts the UGOXML file in <input> to a UGO file with the same"
 		print "              name, unless <output> is specified."
+		print "          If mode is not specified, it will try to find out for itself"
 		sys.exit()
 	
 	mode = sys.argv[1]
 	if mode not in ("-d", "-e"):
-		print "Invalid <mode> given"
-		sys.exit()
+		if os.path.exists(mode):#the mode is actually the file
+			f = open(mode, "rb")
+			magic = f.read(4)
+			f.close()
+			
+			if magic == "UGAR":
+				mode = "-d"
+				print "No mode specified. UGO -> UGOXML chosen"
+			else:
+				mode = "-e"
+				print "No mode specified. UGOXML -> UGO chosen"
+			
+			sys.argv.insert(1, mode)
+		else:
+			print "Invalid <mode> given!"
+			sys.exit()
 	
 	if mode == "-d":
 		input = sys.argv[2]
@@ -566,7 +612,7 @@ if __name__ == "__main__":
 		try:
 			ugo = UGO().ReadXML(input, False)
 		except EL.ParseError:
-			print "Error!\nThe given file is not in the XML format"
+			print "Error!\nThe given file is not in the XML format!"
 			ugo = False
 		if not ugo:
 			#it prints sufficient errormessages
@@ -577,14 +623,3 @@ if __name__ == "__main__":
 		print "Writing UGO..."
 		ugo.WriteFile(output)
 		print "Done"
-		
-		
-
-
-
-
-
-
-
-
-
