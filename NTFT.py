@@ -223,7 +223,7 @@ def ReadImage(path):
 if __name__ == "__main__":
 	print "              ==      NTFT.py     =="
 	print "             ==      by pbsds      =="
-	print "              ==       v0.70      =="
+	print "              ==       v0.71      =="
 	print
 	
 	if len(sys.argv) < 3:
