@@ -120,11 +120,11 @@ class NTFT:
 		
 		#the actual stored data is a image with the sizes padded to the nearest power of 2
 		psize = []
-		for i in size:
+		for i in (w, h):
 			p = 1
 			while 1<<p < i:
 				p += 1
-			padded_size.append(1<<p)
+			psize.append(1<<p)
 		
 		out = []
 		for y in xrange(psize[1]):
@@ -218,18 +218,17 @@ def ReadImage(path):
 #i.Image = ReadImage("NTFTtests/geh.png")
 #i.WriteFile("NTFTtests/geh.ntft")
 
-
-
 if __name__ == "__main__":
 	print "              ==      NTFT.py     =="
 	print "             ==      by pbsds      =="
-	print "              ==       v0.72      =="
+	print "              ==       v0.73      =="
 	print
 	
 	if not hasPIL:
 		print "PIL not found! Exiting..."
+		sys.exit()
 	
-	if len(sys.argv) < 3:
+	if len(sys.argv) < 2:
 		print "Usage:"
 		print "      NTFT.py <input> [<output> [<width> <height>]]"
 		print ""
@@ -243,31 +242,53 @@ if __name__ == "__main__":
 		sys.exit()
 	
 	input = sys.argv[1]
-	Encode = True#if false it'll decode
 	
-	if input[-4:].lower == "ntft" or len(sys.argv) >= 5:
+	if input[-4:].lower() == "ntft" or len(sys.argv) >= 5:
+		print "Mode: NTFT -> image"
 		Encode = False
+	else:
+		print "Mode: image -> NTFT"
+		Encode = True#if false it'll decode
 	
 	if len(sys.argv) >= 3:
 		output = sys.argv[2]
 		
+		width, height = None, None
 		if len(sys.argv) >= 5:
 			if (not sys.argv[3].isdigit()) or (not sys.argv[4].isdigit()):
-				print "Invalid sizes"
+				print "Invalid size input!"
 				sys.exit()
 			width = int(sys.argv[3])
 			height = int(sys.argv[4])
-		else:
-			width, height = None, None
+		
+		if not (width and height):
+			print "Image size not provided!"
+			sys.exit()
+		
 	else:
 		output = ".".join(input.split(".")[:-1]) + (".ntft" if Encode else ".png")
 	
 	print "Converting..."
 	if Encode:
+		try:
+			image = ReadImage(input)
+		except IOError as err:
+			print err
+			sys.exit()
+		
 		i = NTFT()
 		i.Loaded = True
-		i.Image = ReadImage(input)
+		i.Image = image
 		i.WriteFile(output)
 	else:
-		WriteImage(NTFT().ReadFile(input, (width, height)).Image, output)
+		try:
+			ntft = NTFT().ReadFile(input, (width, height))
+		except IOError as err:
+			print err
+			sys.exit()
+		
+		if not ntft:#eeror message already printed
+			sys.exit()
+		
+		WriteImage(ntft.Image, output)
 	print "Done!"
