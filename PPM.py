@@ -610,7 +610,7 @@ def DecodeSound(outputpath, data):
 if __name__ == '__main__':
 	print "              ==      PPM.py      =="
 	print "             ==      by pbsds      =="
-	print "              ==       v1.05      =="
+	print "              ==       v1.06      =="
 	print
 	
 	if len(sys.argv) < 3:

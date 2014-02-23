@@ -3,7 +3,7 @@
   ==  aka Peder Bergebakken Sundt  ==  
 
 --VERSIONS--
-PPM.py:  v1.05
+PPM.py:  v1.06
 UGO.py:  v0.92
 NTFT.py: v0.73
 
