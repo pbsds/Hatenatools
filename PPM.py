@@ -264,14 +264,16 @@ class PPM:
 		#WIP - framemove:
 		FrameMove = [0,0]
 		if Unknown & 0x2:#doesn't work 100%...
+			print "Unknown tags:", Unknown, "(FrameMove) at offset ",offset-1
+			
 			move = AscDec(data[offset:offset+2], True)
 			if move > 128:
 				FrameMove[0] = move - 256
 			else:
 				FrameMove[1] = 0-move
 			offset += 2
-		if Unknown:
-			print "Unknown instance:",Unknown,"at offset ",offset-1
+		elif Unknown:
+			print "Unknown tags:",Unknown,"at offset ",offset-1
 		
 		
 		#read the line encoding of the layers:
@@ -342,7 +344,7 @@ class PPM:
 					for x in range(256):
 						TempX = x+FrameMove[0]
 						TempY = y+FrameMove[1]
-						if 0 <= Tempx < 256 and 0 <= TempY < 192:
+						if 0 <= TempX < 256 and 0 <= TempY < 192:
 							NewPrevFrame[0][TempX][TempY] = PrevFrame[0][x][y]
 							NewPrevFrame[1][TempX][TempY] = PrevFrame[1][x][y]
 				
