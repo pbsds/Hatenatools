@@ -1,8 +1,7 @@
 #PPM.py by pbsds for python 2.7
 #AGPL3 licensed
 #
-#Numpy is required
-#PIL is needed to write images to disk
+#PIL is required to write images to disk
 #
 #Credits:
 #
@@ -11,12 +10,10 @@
 #	-Jsafive for supplying .tmb files
 #
 import sys, wave#needs os and time aswell
-import numpy as np
 try:
 	import Image
 	hasPIL = True
 except ImportError:
-	print "Warning: PIL not found, image extraction won't work!"
 	hasPIL = False
 
 #helpers:
@@ -72,8 +69,8 @@ def AddPadding(i,pad = 0x10):#used mainly for zipaligning offsets
 #	  - instance.OriginalFilename: The original filename
 #	  - instance.CurrentFilename: The current filename
 #	  - instance.Date: The date in seconds since January 1'st 2000
-#	  - instance.GetThumbnail(): The thumbnail stored in a 2D list of uint32 RGBA values (>u4). Will decode it first if not done so already
-#	  - instance.GetFrame(n): Returns the specified frame as a 2D list of uint32 RGBA values (>u4). Only works if ReadFrames was true when reading the PPM file
+#	  - instance.GetThumbnail(): The thumbnail stored in a 2D list of uint32 RGBA values. Will decode it first if not done so already
+#	  - instance.GetFrame(n): Returns the specified frame as a 2D list of uint32 RGBA values. Only works if ReadFrames was true when reading the PPM file
 #	  - instance.Looped: A boolean telling us wether it's looped or not
 #	  - instance.SFXUsage: A list telling us when the different sound effects are used:
 #			instance.SFXUsage[frame] = [SFX1, SFX2, SFX3] where the SFX's are booleans
@@ -130,7 +127,7 @@ class PPM:
 		
 		self.RawThumbnail = data[0xa0:0x6a0]
 		if DecodeThumbnail:
-			self.GetThumbnail()#self.Thumbnail[x, y] = uint32 RGBA
+			self.GetThumbnail()#self.Thumbnail[x][y] = uint32 RGBA
 		
 		self.Loaded[0] = True
 		
@@ -150,7 +147,7 @@ class PPM:
 		
 		#Read the Frames:
 		if ReadFrames:
-			self.Frames = []#self.Frames[frame]  = [inverted(bool), (color1(0-2), color2(0-2)), frame[layer, x, y] = bool]
+			self.Frames = []#self.Frames[frame]  = [inverted(bool), (color1(0-2), color2(0-2)), frame[layer][x][y] = bool]
 			for i, offset in enumerate(FrameOffsets):
 				#Read frame header:
 				Inverted = ord(data[offset]) & 0x01 == 0
@@ -199,19 +196,24 @@ class PPM:
 		Color1 = Palette[Colors[0]]
 		Color2 = Palette[Colors[1]]
 		
-		out = np.zeros((256, 192), dtype=">u4")
-		out[:] = Palette[0]
-		out[Frame[1]] = Color2
-		out[Frame[0]] = Color1
+		out = []
+		for x in xrange(256):
+			out.append([])
+			for y in xrange(192):
+				if Frame[0][x][y]:#Color 1:
+					out[-1].append(Color1)
+				elif Frame[1][x][y]:#Color 2:
+					out[-1].append(Color2)
+				else:#background:
+					out[-1].append(Palette[0])
 		
 		return out
 	def GetThumbnail(self, force=False):
 		if (not self.Thumbnail or force) and self.RawThumbnail:
 			if not self.RawThumbnail:
 				return False
-			
-			out = np.zeros((64, 48), dtype=">u4")
-			
+		
+			out = [[0 for _ in xrange(48)] for _ in xrange(64)]
 			palette =  (0xFEFEFEFF,#0
 						0x4F4F4FFF,#1
 						0xFFFFFFFF,#2
@@ -236,8 +238,8 @@ class PPM:
 						for x in range(0,8,2):
 							#two colors stored in each byte:
 							byte = ord(self.RawThumbnail[(ty*512+tx*64+y*8+x)/2])
-							out[x+tx*8  , y+ty*8] = palette[byte & 0xF]
-							out[x+tx*8+1, y+ty*8] = palette[byte >> 4]
+							out[x+tx*8  ][y+ty*8] = palette[byte & 0xF]
+							out[x+tx*8+1][y+ty*8] = palette[byte >> 4]
 			
 			self.Thumbnail = out
 		return self.Thumbnail
@@ -251,8 +253,7 @@ class PPM:
 		#Color2Frame = [[0 for i in range(192)] for i in range(256)]
 		
 		Encoding = [[], []]
-		#Frame = [[[False for _ in xrange(192)] for _ in xrange(256)] for _ in xrange(2)]
-		Frame = np.zeros((2, 256, 192), dtype=np.bool_)
+		Frame = [[[False for _ in xrange(192)] for _ in xrange(256)] for _ in xrange(2)]
 		
 		#Read tags:
 		NewFrame = ord(data[offset]) & 0x80 <> 0
@@ -315,15 +316,14 @@ class PPM:
 							offset += 1
 							for _ in range(8):
 								if not byte & 0x01:
-									Frame[layer, x, y] = True
+									Frame[layer][x][y] = True
 								x += 1
 								byte >>= 1
 						else:
 							x += 8
 						UseByte <<= 1
 					for n in range(256):
-						#Frame[layer][n][y] = not Frame[layer][n][y]
-						Frame[layer, n, y] = not Frame[layer, n, y]
+						Frame[layer][n][y] = not Frame[layer][n][y]
 				elif Encoding[layer][y] == 3:#Raw/full
 					x = 0
 					for _ in range(32):
@@ -331,27 +331,30 @@ class PPM:
 						offset += 1
 						for _ in range(8):
 							if byte & 0x01:
-								Frame[layer, x, y] = True
+								Frame[layer][x][y] = True
 							x += 1
 							byte >>= 1
 		
 		#Merges this frame with the previous frame if NewFrame isn't true:
-		if not NewFrame and PrevFrame <> None:#maybe optimize this better for numpy...
-			if FrameMove[0] or FrameMove[1]:#Moves the previous frame if specified:
-				NewPrevFrame = np.zeros((2, 256, 192), dtype=np.bool_)
+		if not NewFrame and PrevFrame:
+			if FrameMove[0] or FrameMove[1]:#Moves the previus frame if specified:
+				NewPrevFrame = [[[False for _ in xrange(192)] for _ in xrange(256)] for _ in xrange(2)]
 				
-				for y in range(192):#this still isn't perfected
+				for y in range(192):
 					for x in range(256):
 						TempX = x+FrameMove[0]
 						TempY = y+FrameMove[1]
 						if 0 <= TempX < 256 and 0 <= TempY < 192:
-							NewPrevFrame[0, TempX, TempY] = PrevFrame[0, x, y]
-							NewPrevFrame[1, TempX, TempY] = PrevFrame[1, x, y]
+							NewPrevFrame[0][TempX][TempY] = PrevFrame[0][x][y]
+							NewPrevFrame[1][TempX][TempY] = PrevFrame[1][x][y]
 				
 				PrevFrame = NewPrevFrame
 			
-			#merge the frames:
-			Frame = Frame <> PrevFrame
+			#Merge the frames:
+			for y in range(192):
+				for x in range(256):
+					Frame[0][x][y] = Frame[0][x][y] <> PrevFrame[0][x][y]
+					Frame[1][x][y] = Frame[1][x][y] <> PrevFrame[1][x][y]
 		
 		return Frame
 
@@ -376,7 +379,7 @@ class PPM:
 #	  - instance.OriginalFilename: The original filename
 #	  - instance.CurrentFilename: The current filename
 #	  - instance.Date: The date in seconds since January 1'st 2000
-#	  - instance.GetThumbnail(): The thumbnail stored in a 2D numpy array of uint32 RGBA values (>u4). Will decode it first if not done so already
+#	  - instance.GetThumbnail(): The thumbnail stored in a 2D list of uint32 RGBA values. Will decode it first if not done so already
 class TMB:
 	def __init__(self):
 		self.Loaded = False
@@ -422,7 +425,7 @@ class TMB:
 		
 		self.RawThumbnail = data[0xa0:0x6a0]
 		if DecodeThumbnail:
-			self.GetThumbnail()#self.Thumbnail[x, y] = uint32 RGBA
+			self.GetThumbnail()#self.Thumbnail[x][y] = uint32 RGBA
 		
 		self.Loaded = True
 		#return the results
@@ -467,9 +470,8 @@ class TMB:
 		if (not self.Thumbnail or force) and self.RawThumbnail:
 			if not self.RawThumbnail:
 				return False
-			
-			out = np.zeros((64, 48), dtype=">u4")
-			
+		
+			out = [[0 for _ in xrange(48)] for _ in xrange(64)]
 			palette =  (0xFEFEFEFF,#0
 						0x4F4F4FFF,#1
 						0xFFFFFFFF,#2
@@ -494,8 +496,8 @@ class TMB:
 						for x in range(0,8,2):
 							#two colors stored in each byte:
 							byte = ord(self.RawThumbnail[(ty*512+tx*64+y*8+x)/2])
-							out[x+tx*8  , y+ty*8] = palette[byte & 0xF]
-							out[x+tx*8+1, y+ty*8] = palette[byte >> 4]
+							out[x+tx*8  ][y+ty*8] = palette[byte & 0xF]
+							out[x+tx*8+1][y+ty*8] = palette[byte >> 4]
 			
 			self.Thumbnail = out
 		return self.Thumbnail
@@ -531,8 +533,8 @@ class TMB:
 							for x in range(0,8,2):
 								#two colors stored in each byte:
 								#pos = 0xa0+(ty*512+tx*64+y*8+x)/2
-								p1 = palette.index(int(self.Thumbnail[x+tx*8  , y+ty*8]))
-								p2 = palette.index(int(self.Thumbnail[x+tx*8+1, y+ty*8]))
+								p1 = palette.index(self.Thumbnail[x+tx*8  ][y+ty*8])
+								p2 = palette.index(self.Thumbnail[x+tx*8+1][y+ty*8])
 								out.append(chr(p2<<4 | p1))
 				
 				self.RawThumbnail = "".join(out)
@@ -543,28 +545,22 @@ class TMB:
 
 #Function WriteImage:
 #
-#	Writes a 2D numpy array of uint32 RGBA values (>u4) as a image files.
+#	Writes a 2D list if uint32 RGBA values as a image files.
 #	Designed to work with PPM().Thumbnail or PPM().GetFrame(n)
 #
 #	This function requires the PIl imaging module
 def WriteImage(image, outputPath):
-	if not hasPIL:
-		print "Error: PIL not found!"
-		return False
-	#if not image: return False
+	if not hasPIL or not image: return False
 	
-	out = image.tostring("F")
+	out = []
+	for y in xrange(len(image[0])):
+		for x in xrange(len(image)):
+			out.append(DecAsc(image[x][y], 4))
 	
-	# out = []
-	# for y in xrange(len(image[0])):
-		# for x in xrange(len(image)):
-			# out.append(DecAsc(image[x][y], 4))
-	
-	out = Image.fromstring("RGBA", (len(image), len(image[0])), out)
+	out = Image.fromstring("RGBA", (len(image), len(image[0])), "".join(out))
 	
 	filetype = outputPath[outputPath.rfind(".")+1:]
 	out.save(outputPath, filetype)
-	
 	
 	return True
 
@@ -590,7 +586,10 @@ def DecodeSound(outputpath, data):
 #testing:
 # p = PPM()
 # print "loading ppm..."
-# p.ReadFile("PPMtests/test8.ppm", (1, 1, 1))
+# p.ReadFile("PPMtests/test.ppm", (1, 1, 1))
+
+# print str(p.OriginalAuthorName), str(p.OriginalAuthorID)
+# print str(p.EditorAuthorName), str(p.EditorAuthorID)
 
 # print "Dumping Thumbnail..."
 # WriteImage(p.Thumbnail, "thumbnail.png")
@@ -611,7 +610,7 @@ def DecodeSound(outputpath, data):
 if __name__ == '__main__':
 	print "              ==      PPM.py      =="
 	print "             ==      by pbsds      =="
-	print "              ==       v1.2      =="
+	print "              ==       v1.06      =="
 	print
 	
 	if len(sys.argv) < 3:

@@ -3,19 +3,23 @@
   ==  aka Peder Bergebakken Sundt  ==  
 
 --VERSIONS--
-PPM.py:  v1.06
-UGO.py:  v0.92
-NTFT.py: v0.73
+PPM.py:         v1.2
+PPM_nonumpy.py: v1.06
+UGO.py:         v0.92
+NTFT.py:        v0.73
 
 --DESCRIPTION--
 PPM.py can read the metadata, thumbnail, frames and the sound of Flipnote Studio files: .ppm
 It can also handle .tmb files.
+If you don't have numpy, you can use the non numpy version PPM_nonumpy.py
 
 UGO.py can read and write UGO files, and modify their content. It can also convert UGO files
 to and from the XML format
 
 NTFT.py can read ntft image files and convert them to image files
 Warning, it's still in a very crude state. Error will occour
+
+
 
 These are all tested and written in python 2.7
 These are all designed to be usable both as python modules and as stand alone applications.
