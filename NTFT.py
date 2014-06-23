@@ -118,8 +118,6 @@ class NTFT:
 		h = len(self.Image[0])
 		w = len(self.Image)
 		
-		print w, h
-		
 		#the actual stored data is a image with the sizes padded to the nearest power of 2
 		psize = []
 		for i in (w, h):
