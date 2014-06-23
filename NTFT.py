@@ -44,7 +44,7 @@ def DecAsc(dec, length=None, LittleEndian=False):#Converts a decimal into an asc
 def clamp(value, min, max):
 	if value > max: return max
 	if value < min: return min
-	return value
+	return  value
 
 #Class NTFT:
 #
@@ -115,8 +115,10 @@ class NTFT:
 		if not self.Loaded:
 			return False
 		
-		w = len(self.Image[0])
-		h = len(self.Image)
+		h = len(self.Image[0])
+		w = len(self.Image)
+		
+		print w, h
 		
 		#the actual stored data is a image with the sizes padded to the nearest power of 2
 		psize = []
@@ -221,7 +223,7 @@ def ReadImage(path):
 if __name__ == "__main__":
 	print "              ==      NTFT.py     =="
 	print "             ==      by pbsds      =="
-	print "              ==       v0.73      =="
+	print "              ==       v0.80      =="
 	print
 	
 	if not hasPIL:
@@ -233,7 +235,7 @@ if __name__ == "__main__":
 		print "      NTFT.py <input> [<output> [<width> <height>]]"
 		print ""
 		print "Can convert a NTFT to PNG or the other way around."
-		print "if <output> isn't spesified it will be set to <input> with an another extention"
+		print "if <output> isn't specified it will be set to <input> with an another extension"
 		print ""
 		print "The NTFT file contain only the colordata, so it's up to the user to find or"
 		print "store the resolution of the image. <width> and <height> is required"
@@ -261,7 +263,7 @@ if __name__ == "__main__":
 			width = int(sys.argv[3])
 			height = int(sys.argv[4])
 		
-		if not (width and height):
+		if not (width and height) and not Encode:
 			print "Image size not provided!"
 			sys.exit()
 		

@@ -6,7 +6,7 @@
 PPM.py:         v1.2
 PPM_nonumpy.py: v1.06
 UGO.py:         v0.92
-NTFT.py:        v0.73
+NTFT.py:        v0.80
 
 --DESCRIPTION--
 PPM.py can read the metadata, thumbnail, frames and the sound of Flipnote Studio files: .ppm
