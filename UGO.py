@@ -175,7 +175,7 @@ class UGO:
 						
 						if name+".tmb" in names:
 							j = 2
-							while "%s_%i.tmb" % (name, j) not in names:
+							while "%s_%i.tmb" % (name, j) in names:
 								j += 1
 							name = "%s_%i" % (name, j)
 						
@@ -189,7 +189,7 @@ class UGO:
 						
 						if name+".ntft" in names:
 							j = 2
-							while "%s_%i.ntft" % (name, j) not in names:
+							while "%s_%i.ntft" % (name, j) in names:
 								j += 1
 							name = "%s_%i" % (name, j)
 						
@@ -551,7 +551,7 @@ class UGO:
 if __name__ == "__main__":
 	print "              ==      UGO.py      =="
 	print "             ==      by pbsds      =="
-	print "              ==       v0.92      =="
+	print "              ==       v0.93      =="
 	print
 	
 	if len(sys.argv) < 2:
