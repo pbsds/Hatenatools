@@ -6,11 +6,12 @@
 #
 #Credits:
 #
-#	-Steven for most of the documentation on DSiBrew and his frame decoding example on his talkpage
-#	-Remark for help on the 8x8 tiling on the preview image.
-#	-Jsafive for supplying .tmb files
+#	- Steven for most of the documentation on DSiBrew and his frame decoding example on his talkpage
+#	- Remark for help on the 8x8 tiling on the preview image.
+#	- Jsafive for supplying .tmb files
+#	- Austin Burk, Midmad on hatena haiku and WDLmaster on hcs64.com for determining the sound codec
 #
-import sys, wave#needs os and time aswell
+import sys, wave, audioop#needs os and time aswell in CMD mode
 import numpy as np
 try:
 	import Image
@@ -241,7 +242,34 @@ class PPM:
 			
 			self.Thumbnail = out
 		return self.Thumbnail
-	#sub functions:
+	def GetSound(self, index, outputpath=None):#index 0 is BGM. 1, 2 and 3 is SFX. if outputpath is None, the raw mono PCM @ 8kHz is returned instead
+		if self.Loaded[2]:
+			if self.SoundData[index]:
+				#reverse nibbles:
+				data = []
+				for i in map(ord,self.SoundData[index]):
+					data.append(chr((i&0xF)<< 4 | (i>>4)))
+				data = "".join(data)
+				
+				#4bit ADPCM decode
+				decoded = audioop.adpcm2lin(data, 2, None)[0]
+				
+				#write to wav:
+				if outputpath:
+					f = wave.open(outputpath, "wb")
+					f.setnchannels(1)
+					f.setsampwidth(2)
+					f.setframerate(8000)
+					f.writeframes(decoded)
+					#f.writeframes("".join(out))
+					f.close()
+					
+					return True
+				else:
+					return decoded
+			else:
+				return False
+	#sub functions: (private)
 	def ExtractFrame(self, data, offset, PrevFrame=None):
 		#defines line encoding storage:
 		#Enc1 = [0 for i in range(192)]
@@ -568,50 +596,12 @@ def WriteImage(image, outputPath):
 	
 	return True
 
-#this is just for experimenting with sound decoding:
-#not even remotely close to being finished
-def DecodeSound(outputpath, data):
-	f = wave.open(outputpath, "wb")
-	f.setnchannels(1)
-	f.setsampwidth(2)
-	f.setframerate(32000)
-	for i in data:
-		i1 = ord(i)&0xF
-		i2 = (ord(i)>>4)&0xF
-		#Noise reduction:
-		#if i1&0x8: i1 = 0xF-(i1&0x7)
-		#if i2&0x8: i2 = 0xF-(i2&0x7)
-		i1 = i1&0x7 if i1&0x8 else 0xF-i1
-		i2 = i2&0x7 if i2&0x8 else 0xF-i2
-		f.writeframes(DecAsc(i1<<12, 2, True)*4)
-		f.writeframes(DecAsc(i2<<12, 2, True)*4)
-	f.close()
 
-#testing:
-# p = PPM()
-# print "loading ppm..."
-# p.ReadFile("PPMtests/test8.ppm", (1, 1, 1))
-
-# print "Dumping Thumbnail..."
-# WriteImage(p.Thumbnail, "thumbnail.png")
-
-# print "Dumping frames..."
-# for i in xrange(p.FrameCount):
-	# WriteImage(p.GetFrame(i), "frames/frame %i.png" % i)
-
-# print "Dumping raw sounds..."
-# for i, data in enumerate(p.SoundData):
-	# f = open("sound %i.bin" % i, "wb")
-	# f.write(data)
-	# f.close()
-
-# print "Extracting sounds...."
-# for i, d in enumerate(p.SoundData): DecodeSound("out_%i.wav"%i, d)
 
 if __name__ == '__main__':
 	print "              ==      PPM.py      =="
 	print "             ==      by pbsds      =="
-	print "              ==       v1.2      =="
+	print "              ==       v1.3      =="
 	print
 	
 	if len(sys.argv) < 3:
@@ -621,9 +611,8 @@ if __name__ == '__main__':
 		print "      <Mode>:"
 		print "          -t: Extracts the thumbnail to the file <Output>"
 		print "          -f: Extracts the frame(s) to <Output>"
-		print "          -s: Dumps the raw sound data files to the folder <Output>"
-		print "          -S: Same as mode 2, but will also dump the experimentally decoded"
-		print "              sounds."
+		print "          -s: Dumps the sound files to the folder <Output>"
+		print "          -S: Same as mode -s, but will also dump the raw sound data files"
 		print "          -m: Prints out the metadata. Can also write it to <output> which also"
 		print "              supports unicode charactes."
 		print "          Mode -t and -m supports TMB files aswell"
@@ -709,21 +698,20 @@ if __name__ == '__main__':
 		print "Done!"
 		
 		if not os.path.isdir(sys.argv[3]):
-			print "Error!\nThe specified directory doesn't exist!"
+			print "Error!\nThe specified output directory doesn't exist!"
 			sys.exit()
 		
-		print "Dumping the raw sound data...",
+		print "Converting the sound files...",
 		for i, data in enumerate(flipnote.SoundData):
-			f = open(os.path.join(sys.argv[3], ("BGM.bin", "SFX1.bin", "SFX2.bin", "SFX3.bin")[i]), "wb")
-			f.write(data)
-			f.close()
+			if not data: continue
+			path = os.path.join(sys.argv[3], ("BGM.wav", "SFX1.wav", "SFX2.wav", "SFX3.wav")[i])
+			flipnote.GetSound(i, path)
+			
+			if sys.argv[1] == "-S":
+				f = open(path[:-3]+"bin", "wb")
+				f.write(data)
+				f.close()
 		print "Done!"
-		
-		if sys.argv[1] == "-S":
-			print "Dumping the decoded sound data...",
-			for i, data in enumerate(flipnote.SoundData):
-				DecodeSound(os.path.join(sys.argv[3], ("BGM decoded.wav", "SFX1 decoded.wav", "SFX2 decoded.wav", "SFX3 decoded.wav")[i]), data)
-			print "Done!"
 		
 		print "Dumping the sound effect usage...",
 		f = open(os.path.join(sys.argv[3], "SFX usage.txt"), "w")
@@ -755,6 +743,7 @@ if __name__ == '__main__':
 		meta.append(u"Locked:                            %s" % flipnote.Locked)
 		if filetype == "ppm":
 			meta.append(u"Frame speed:                       %s" % flipnote.Framespeed)
+			meta.append(u"Frame speed:                       %s" % flipnote.BGMFramespeed)
 			meta.append(u"Looped:                            %s" % flipnote.Looped)
 		meta.append(u"Thumbnail frame index:             %i" % (flipnote.ThumbnailFrameIndex+1))
 		meta.append(u"Original author:                   %s" % flipnote.OriginalAuthorName)
