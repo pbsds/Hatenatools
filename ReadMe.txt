@@ -4,33 +4,29 @@
 
 --VERSIONS--
 PPM.py:         v1.3
-PPM_nonumpy.py: v1.06
 UGO.py:         v0.93
-NTFT.py:        v0.80
+NTFT.py:        v0.95
 
 --DESCRIPTION--
 PPM.py can read the metadata, thumbnail, frames and the sound of Flipnote Studio files: .ppm
 It can also handle .tmb files.
-If you don't have numpy, you can use the old non-numpy version PPM_nonumpy.py. This one doesn't support sound conversion
 
 UGO.py can read and write UGO files, and modify their content. It can also convert UGO files
 to and from the XML format
 
-NTFT.py can read ntft image files and convert them to image files
-Warning, it's still in a very crude state. Error will occour
-
-
+NTFT.py can read ntft image files and convert them to PIL supported image files
 
 These are all tested and written in python 2.7
 These are all designed to be usable both as python modules and as stand alone applications.
+NTFT.py and PPM.py requires Numpy and PIL
 
 --DOCUMENTATION--
 Documentation on the formats can be found here:
 https://github.com/pbsds/hatena-server/wiki
 
 --LICENSE--
-This is licensed by AGPL3
-See License.txt
+Hatenatools is licensed under AGPL3
+See License.txt or http://www.gnu.org/licenses/agpl-3.0.html for more information
 
 --CREDIT--
 -Steven for most of the documentation on DSiBrew and his frame decoding example on his talkpage

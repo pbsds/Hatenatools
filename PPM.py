@@ -50,6 +50,25 @@ def AddPadding(i,pad = 0x10):#used mainly for zipaligning offsets
 		return i + pad - (i % pad)
 	return i
 
+#palettes:
+FramePalette = [0xFFFFFFFF,0x000000FF,0xFF0000FF,0x0000FFFF]
+ThumbPalette = (0xFEFEFEFF,#0
+				0x4F4F4FFF,#1
+				0xFFFFFFFF,#2
+				0x9F9F9FFF,#3
+				0xFF0000FF,#4
+				0x770000FF,#5
+				0xFF7777FF,#6
+				0x00FF00FF,#7-
+				0x0000FFFF,#8
+				0x000077FF,#9
+				0x7777FFFF,#A
+				0x00FF00FF,#B-
+				0xFF00FFFF,#C
+				0x00FF00FF,#D-
+				0x00FF00FF,#E-
+				0x00FF00FF)#F-
+	
 #Class PPM:
 #
 #	With this class you can read a Flipnote PPM file into memory and get its attributes.
@@ -75,6 +94,7 @@ def AddPadding(i,pad = 0x10):#used mainly for zipaligning offsets
 #	  - instance.Date: The date in seconds since January 1'st 2000
 #	  - instance.GetThumbnail(): The thumbnail stored in a 2D list of uint32 RGBA values (>u4). Will decode it first if not done so already
 #	  - instance.GetFrame(n): Returns the specified frame as a 2D list of uint32 RGBA values (>u4). Only works if ReadFrames was true when reading the PPM file
+#	  - instance.GetSound(n): Returns the decoded sound. Index 0 is the BGM. 1, 2 and 3 are the SFXs. if outputpath is None, the raw mono PCM @ 8184Hz is returned instead as a string
 #	  - instance.Looped: A boolean telling us wether it's looped or not
 #	  - instance.SFXUsage: A list telling us when the different sound effects are used:
 #			instance.SFXUsage[frame] = [SFX1, SFX2, SFX3] where the SFX's are booleans
@@ -120,8 +140,8 @@ class PPM:
 		
 		self.OriginalFilenameC = data[0x66:0x78]#compressed
 		self.CurrentFilenameC = data[0x78:0x8a]#compressed
-		self.OriginalFilename = "%s_%s_%s.tmb" % (self.OriginalFilenameC[:3].encode("HEX").upper(), self.OriginalFilenameC[3:-2], str(AscDec(self.OriginalFilenameC[-2:], True)).zfill(3))
-		self.CurrentFilename = "%s_%s_%s.tmb" % (self.CurrentFilenameC[:3].encode("HEX").upper(), self.CurrentFilenameC[3:-2], str(AscDec(self.CurrentFilenameC[-2:], True)).zfill(3))
+		self.OriginalFilename = "%s_%s_%s.ppm" % (self.OriginalFilenameC[:3].encode("HEX").upper(), self.OriginalFilenameC[3:-2], str(AscDec(self.OriginalFilenameC[-2:], True)).zfill(3))
+		self.CurrentFilename = "%s_%s_%s.ppm" % (self.CurrentFilenameC[:3].encode("HEX").upper(), self.CurrentFilenameC[3:-2], str(AscDec(self.CurrentFilenameC[-2:], True)).zfill(3))
 		
 		self.PreviousEditAuthorID = data[0x8a:0x92][::-1].encode("HEX").upper()#don't know what this really is
 		
@@ -188,15 +208,15 @@ class PPM:
 		pass
 	#Extracting:
 	def GetFrame(self, frame):#frame is the index in self.Frames. Only works if ReadFrames was True when reading the PPM file
+		global FramePalette
 		if not self.Loaded[1]: return None
 		
 		Inverted, Colors, Frame = self.Frames[frame]
 		
 		#Defines the palette:
-		Palette = [0xFFFFFFFF,0x000000FF,0xFF0000FF,0x0000FFFF]
+		Palette = FramePalette[:]
 		if Inverted:
-			Palette[0] = 0x000000FF
-			Palette[1] = 0xFFFFFFFF
+			Palette[0], Palette[1] = Palette[1], Palette[0]
 		Color1 = Palette[Colors[0]]
 		Color2 = Palette[Colors[1]]
 		
@@ -207,28 +227,15 @@ class PPM:
 		
 		return out
 	def GetThumbnail(self, force=False):
-		if (not self.Thumbnail or force) and self.RawThumbnail:
+		if (self.Thumbnail is None or force):# and self.RawThumbnail:
+			global ThumbPalette
 			if not self.RawThumbnail:
 				return False
 			
 			out = np.zeros((64, 48), dtype=">u4")
 			
-			palette =  (0xFEFEFEFF,#0
-						0x4F4F4FFF,#1
-						0xFFFFFFFF,#2
-						0x9F9F9FFF,#3
-						0xFF0000FF,#4
-						0x770000FF,#5
-						0xFF7777FF,#6
-						0x00FF00FF,#7-
-						0x0000FFFF,#8
-						0x000077FF,#9
-						0x7777FFFF,#A
-						0x00FF00FF,#B-
-						0xFF00FFFF,#C
-						0x00FF00FF,#D-
-						0x00FF00FF,#E-
-						0x00FF00FF)#F-
+			#speedup:
+			palette = ThumbPalette
 			
 			#8x8 tiling:
 			for ty in range(6):
@@ -242,7 +249,7 @@ class PPM:
 			
 			self.Thumbnail = out
 		return self.Thumbnail
-	def GetSound(self, index, outputpath=None):#index 0 is BGM. 1, 2 and 3 is SFX. if outputpath is None, the raw mono PCM @ 8kHz is returned instead
+	def GetSound(self, index, outputpath=None):#index 0 is BGM. 1, 2 and 3 is SFX. if outputpath is None, the raw mono PCM @ 8184Hz is returned instead
 		if self.Loaded[2]:
 			if self.SoundData[index]:
 				#reverse nibbles:
@@ -259,7 +266,7 @@ class PPM:
 					f = wave.open(outputpath, "wb")
 					f.setnchannels(1)
 					f.setsampwidth(2)
-					f.setframerate(8000)
+					f.setframerate(8184)
 					f.writeframes(decoded)
 					#f.writeframes("".join(out))
 					f.close()
@@ -492,28 +499,15 @@ class TMB:
 		
 		return "".join(out)
 	def GetThumbnail(self, force=False):
-		if (not self.Thumbnail or force) and self.RawThumbnail:
+		if (self.Thumbnail is None or force):# and self.RawThumbnail:
+			global ThumbPalette
 			if not self.RawThumbnail:
 				return False
 			
 			out = np.zeros((64, 48), dtype=">u4")
 			
-			palette =  (0xFEFEFEFF,#0
-						0x4F4F4FFF,#1
-						0xFFFFFFFF,#2
-						0x9F9F9FFF,#3
-						0xFF0000FF,#4
-						0x770000FF,#5
-						0xFF7777FF,#6
-						0x00FF00FF,#7-
-						0x0000FFFF,#8
-						0x000077FF,#9
-						0x7777FFFF,#A
-						0x00FF00FF,#B-
-						0xFF00FFFF,#C
-						0x00FF00FF,#D-
-						0x00FF00FF,#E-
-						0x00FF00FF)#F-
+			#speedup:
+			palette = ThumbPalette
 			
 			#8x8 tiling:
 			for ty in range(6):
