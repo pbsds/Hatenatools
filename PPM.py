@@ -266,7 +266,7 @@ class PPM:
 					f = wave.open(outputpath, "wb")
 					f.setnchannels(1)
 					f.setsampwidth(2)
-					f.setframerate(8184)
+					f.setframerate(8192)#possibly 8184, but not a noticable difference anyway
 					f.writeframes(decoded)
 					#f.writeframes("".join(out))
 					f.close()
