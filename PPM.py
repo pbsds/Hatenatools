@@ -583,7 +583,7 @@ def WriteImage(image, outputPath):
 		# for x in xrange(len(image)):
 			# out.append(DecAsc(image[x][y], 4))
 	
-	out = Image.fromstring("RGBA", (len(image), len(image[0])), out)
+	out = Image.frombytes("RGBA", (len(image), len(image[0])), out)
 	
 	filetype = outputPath[outputPath.rfind(".")+1:]
 	out.save(outputPath, filetype)
