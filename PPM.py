@@ -372,7 +372,7 @@ class PPM:
 							byte >>= 1
 		
 		#Merges this frame with the previous frame if NewFrame isn't true:
-		if not NewFrame and PrevFrame <> None:#maybe optimize this better for numpy...
+		if not NewFrame and PrevFrame.all() <> None:#maybe optimize this better for numpy...
 			if FrameMove[0] or FrameMove[1]:#Moves the previous frame if specified:
 				NewPrevFrame = np.zeros((2, 256, 192), dtype=np.bool_)
 				
