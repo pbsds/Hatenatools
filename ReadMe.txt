@@ -2,8 +2,10 @@
   ==            By pbsds           ==  
   ==  aka Peder Bergebakken Sundt  ==  
 
+(with some additions from WORD559)
+
 --VERSIONS--
-PPM.py:         v1.3
+PPM.py:         v1.4
 UGO.py:         v0.93
 NTFT.py:        v0.95
 

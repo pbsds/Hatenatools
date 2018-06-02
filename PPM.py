@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 #PPM.py by pbsds for python 2.7
 #AGPL3 licensed
 #
@@ -11,10 +12,10 @@
 #	- Jsafive for supplying .tmb files
 #	- Austin Burk, Midmad on hatena haiku and WDLmaster on hcs64.com for determining the sound codec
 #
-import sys, wave, audioop#needs os and time aswell in CMD mode
+import sys, wave, audioop, re#needs os and time aswell in CMD mode
 import numpy as np
 try:
-	import Image
+	from PIL import Image
 	hasPIL = True
 except ImportError:
 	print "Warning: PIL not found, image extraction won't work!"
@@ -371,7 +372,7 @@ class PPM:
 							byte >>= 1
 		
 		#Merges this frame with the previous frame if NewFrame isn't true:
-		if not NewFrame and PrevFrame <> None:#maybe optimize this better for numpy...
+		if not NewFrame and PrevFrame.all() <> None:#maybe optimize this better for numpy...
 			if FrameMove[0] or FrameMove[1]:#Moves the previous frame if specified:
 				NewPrevFrame = np.zeros((2, 256, 192), dtype=np.bool_)
 				
@@ -582,7 +583,7 @@ def WriteImage(image, outputPath):
 		# for x in xrange(len(image)):
 			# out.append(DecAsc(image[x][y], 4))
 	
-	out = Image.fromstring("RGBA", (len(image), len(image[0])), out)
+	out = Image.frombytes("RGBA", (len(image), len(image[0])), out)
 	
 	filetype = outputPath[outputPath.rfind(".")+1:]
 	out.save(outputPath, filetype)
@@ -590,6 +591,27 @@ def WriteImage(image, outputPath):
 	
 	return True
 
+def get_metadata(flipnote):
+        meta = {
+        u"Current filename":flipnote.CurrentFilename[:-3]+filetype,
+        u"Original filename":flipnote.OriginalFilename[:-3]+filetype,
+        u"Number of frames":flipnote.FrameCount,
+        u"Locked":flipnote.Locked,
+        u"Thumbnail frame index":(flipnote.ThumbnailFrameIndex+1),
+        u"Original author":flipnote.OriginalAuthorName,
+        u"Editor author":flipnote.EditorAuthorName,
+        u"Username":flipnote.Username,
+        u"Original author ID":flipnote.OriginalAuthorID,
+        u"Editor author ID":flipnote.EditorAuthorID,
+        u"Date(seconds since 1'st Jan 2000)":flipnote.Date,
+        u"Date":time.strftime("%H:%M %d/%m-%Y (faulty)", time.gmtime(epoch+flipnote.Date)),
+        }
+        if filetype == "ppm":
+                meta[u"Frame speed"]=flipnote.Framespeed
+                meta[u"Frame speed"]=flipnote.BGMFramespeed
+                meta[u"Looped"]=flipnote.Looped
+                
+        return meta
 
 
 if __name__ == '__main__':
@@ -609,6 +631,7 @@ if __name__ == '__main__':
 		print "          -S: Same as mode -s, but will also dump the raw sound data files"
 		print "          -m: Prints out the metadata. Can also write it to <output> which also"
 		print "              supports unicode charactes."
+		print "          -oa: Seach a directory for an original author that matches the RegEx"
 		print "          Mode -t and -m supports TMB files aswell"
 		print "      <Frame>"
 		print "          Only used in mode -f"
@@ -730,33 +753,35 @@ if __name__ == '__main__':
 				f.close()
 			sys.exit()
 		
-		meta = []
-		meta.append(u"Current filename:                  %s" % flipnote.CurrentFilename[:-3]+filetype)
-		meta.append(u"Original filename:                 %s" % flipnote.OriginalFilename[:-3]+filetype)
-		meta.append(u"Number of frames:                  %s" % flipnote.FrameCount)
-		meta.append(u"Locked:                            %s" % flipnote.Locked)
-		if filetype == "ppm":
-			meta.append(u"Frame speed:                       %s" % flipnote.Framespeed)
-			meta.append(u"Frame speed:                       %s" % flipnote.BGMFramespeed)
-			meta.append(u"Looped:                            %s" % flipnote.Looped)
-		meta.append(u"Thumbnail frame index:             %i" % (flipnote.ThumbnailFrameIndex+1))
-		meta.append(u"Original author:                   %s" % flipnote.OriginalAuthorName)
-		meta.append(u"Editor author:                     %s" % flipnote.EditorAuthorName)
-		meta.append(u"Username:                          %s" % flipnote.Username)
-		meta.append(u"Original author ID:                %s" % flipnote.OriginalAuthorID)
-		meta.append(u"Editor author ID:                  %s" % flipnote.EditorAuthorID)
-		meta.append(u"Date(seconds since 1'st Jan 2000): %s" % flipnote.Date)
-		meta.append(time.strftime(u"Date:                              %H:%M %d/%m-%Y", time.gmtime(epoch+flipnote.Date)) + " (faulty)")
-		
+		meta = get_metadata(flipnote)
 		newline = "\n"
 		if sys.platform in ("win32", "cygwin"): newline = "\r\n"
 		elif sys.platform in ("darwin"): newline = "\r"
-		
-		print newline.join(meta).encode('ascii', 'ignore')
+
+		print newline.join(["\t".join([unicode(char) for char in line]) for line in meta.items()]).encode('ascii', 'ignore')
 		
 		if len(sys.argv) >= 4:
 			f = open(sys.argv[3], "wb")
 			f.write(newline.join(meta).encode("UTF-8"))
 			f.close()
+	elif sys.argv[1] == "-oa":
+                regex = re.compile(sys.argv[2])
+                os.chdir(sys.argv[3])
+                for filename in os.listdir("."):
+                        epoch = time.mktime(time.struct_time([2000, 1, 1, 0, 0, 0, 5, 1, -1]))
+                        
+                        if not os.path.isfile(filename):
+                                print "Error!\nSpecified file doesn't exist!"
+                                sys.exit()
+                        
+                        filetype = "ppm" if filename[-3:] == "ppm" else "tmb"
+                        flipnote = TMB().ReadFile(filename) if filetype == "tmb" else PPM().ReadFile(filename, ReadFrames=False)
+                        if not flipnote:
+                                continue
+
+                        meta = get_metadata(flipnote)
+                        if regex.match(meta["Original author"]):
+                                print filename
+                        
 	else:
 		print "Error!\nThere's no such mode."
