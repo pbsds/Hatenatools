@@ -15,6 +15,7 @@
 import sys, wave, audioop, re, os #needs os and time aswell in CMD mode (UPDATE 2018/07/04: os used to get devnull for discarding subprocess output)
 import numpy as np
 import subprocess # used for ffmpeg
+import tempfile, shutil # temporary directory whilst exporting, shutil to clean up after
 try:
 	from PIL import Image
 	hasPIL = True
@@ -625,6 +626,26 @@ def get_metadata(flipnote):
 			
 	return meta
 
+def DumpFrames(flipnote,directory):
+	for i in xrange(flipnote.FrameCount):
+		print "Dumping frame #%i..." % (i+1),
+		WriteImage(flipnote.GetFrame(i), os.path.join(directory, "frame %s.png" % str(i+1).zfill(3)))
+			
+def DumpSoundFiles(flipnote,directory,raw=False):
+	for i, data in enumerate(flipnote.SoundData):
+		if not data: continue
+		path = os.path.join(directory, ("BGM.wav", "SFX1.wav", "SFX2.wav", "SFX3.wav")[i])
+		flipnote.GetSound(i, path)
+		
+		if raw:
+			f = open(path[:-3]+"bin", "wb")
+			f.write(data)
+			f.close()
+
+def DumpSFXUsage(flipnote,directory):
+	with open(os.path.join(directory, "SFX usage.txt"), "w") as f:
+		for i, (s1, s2, s3) in enumerate(flipnote.SFXUsage):
+			f.write("Frame %i:%s%s%s\n" % (i, " SFX1"*s1, " SFX2"*s2, " SFX3"*s3))
 
 if __name__ == '__main__':
 	print "              ==      PPM.py      =="
@@ -641,6 +662,7 @@ if __name__ == '__main__':
 		print "          -f: Extracts the frame(s) to <Output>"
 		print "          -s: Dumps the sound files to the folder <Output>"
 		print "          -S: Same as mode -s, but will also dump the raw sound data files"
+		print "          -e: Exports the flipnote to an MKV"
 		print "          -m: Prints out the metadata. Can also write it to <output> which also"
 		print "              supports unicode charactes."
 		print "          -oa: Seach a directory for an original author that matches the RegEx"
@@ -691,11 +713,10 @@ if __name__ == '__main__':
 			if not os.path.isdir(sys.argv[3]):
 				print "Error!\nThe specified directory doesn't exist!"
 				sys.exit()
+
+			DumpFrames(flipnote,sys.argv[3])
 			
-			for i in xrange(flipnote.FrameCount):
-				print "Dumping frame #%i..." % (i+1),
-				WriteImage(flipnote.GetFrame(i), os.path.join(sys.argv[3], "frame %s.png" % str(i+1).zfill(3)))
-				print "Done!"
+			print "Done!"
 		else:
 			try:
 				int(sys.argv[4])
@@ -731,22 +752,11 @@ if __name__ == '__main__':
 			sys.exit()
 		
 		print "Converting the sound files...",
-		for i, data in enumerate(flipnote.SoundData):
-			if not data: continue
-			path = os.path.join(sys.argv[3], ("BGM.wav", "SFX1.wav", "SFX2.wav", "SFX3.wav")[i])
-			flipnote.GetSound(i, path)
-			
-			if sys.argv[1] == "-S":
-				f = open(path[:-3]+"bin", "wb")
-				f.write(data)
-				f.close()
+		DumpSoundFiles(flipnote,sys.argv[3],raw=(sys.argv[1]=="-S"))
 		print "Done!"
 		
 		print "Dumping the sound effect usage...",
-		f = open(os.path.join(sys.argv[3], "SFX usage.txt"), "w")
-		for i, (s1, s2, s3) in enumerate(flipnote.SFXUsage):
-			f.write("Frame %i:%s%s%s\n" % (i, " SFX1"*s1, " SFX2"*s2, " SFX3"*s3))
-		f.close()
+		DumpSFXUsage(flipnote,sys.argv[3])
 		print "Done!"
 	elif sys.argv[1] == "-m":
 		epoch = time.mktime(time.struct_time([2000, 1, 1, 0, 0, 0, 5, 1, -1]))
@@ -785,7 +795,7 @@ if __name__ == '__main__':
 				print "Error!\nSpecified file doesn't exist!"
 				sys.exit()
 				
-			filetype = "ppm" if filename[-3:] == "ppm" else "tmb"
+			filetype = "ppm" if filename[-3:].lower() == "ppm" else "tmb"
 			flipnote = TMB().ReadFile(filename) if filetype == "tmb" else PPM().ReadFile(filename, ReadFrames=False)
 			if not flipnote:
 				continue
@@ -793,6 +803,37 @@ if __name__ == '__main__':
 			meta = get_metadata(flipnote)
 			if regex.match(meta["Original author"]):
 				print filename
-						
+
+	elif sys.argv[1] == "-e":
+		in_file = sys.argv[2]
+		out_file = sys.argv[3]
+		if out_file.lower()[-4:] != ".mkv":
+			out_file += ".mkv"
+		if not os.path.isfile(in_file):
+			print "Error!\nSpecified file doesn't exist!"
+			sys.exit()
+		if os.path.isfile(out_file):
+			print "Overwrite existing file?"
+			overwrite = ""
+			while overwrite != "y" and overwrite != "n":
+				overwrite = raw_input("(Y/N) ").lower()
+			if overwrite == "n":
+				print "Not overwriting; exiting."
+				sys.exit()
+		filetype = "ppm" if in_file[-3:].lower() == "ppm" else "tmb"
+		flipnote = TMB().ReadFile(in_file) if filetype == "tmb" else PPM().ReadFile(in_file, ReadFrames=True, ReadSound=True)
+
+		# Make temp dir and dump the frames and sound here
+		tempdir = tempfile.mkdtemp()
+		print "Dumping the frames..."
+		DumpFrames(flipnote,tempdir)
+		print "Done!"
+		print "Dumping the sounds..."
+		DumpSoundFiles(flipnote,tempdir)
+		print "Done!"
+		print "Dumping SFX usage..."
+		DumpSFXUsage(flipnote,tempdir)
+		print "Done!"
+		
 	else:
 		print "Error!\nThere's no such mode."
