@@ -479,23 +479,23 @@ class TMB:
 		#if ppm: self = ppm
 		
 		out = ["PARA",#magic
-		       DecAsc(self.AudioOffset-0x6a0, 4, True),#animation data size
-		       DecAsc(self.AudioLenght, 4, True),#audio data size
-		       DecAsc(self.FrameCount-1, 2, True),#frame count
-		       "\x24\x00",#unknown
-		       chr(self.Locked), "\0",#locked
-		       DecAsc(self.ThumbnailFrameIndex, 2, True),#which frame is in the thumbnnail
-		       self.OriginalAuthorName.encode("UTF-16LE") + "\0\0"*(11-len(self.OriginalAuthorName)),#Original Author Name
-		       self.EditorAuthorName.encode("UTF-16LE") + "\0\0"*(11-len(self.EditorAuthorName)),#Editor Author Name
-		       self.Username.encode("UTF-16LE") + "\0\0"*(11-len(self.Username)),#Username
+			   DecAsc(self.AudioOffset-0x6a0, 4, True),#animation data size
+			   DecAsc(self.AudioLenght, 4, True),#audio data size
+			   DecAsc(self.FrameCount-1, 2, True),#frame count
+			   "\x24\x00",#unknown
+			   chr(self.Locked), "\0",#locked
+			   DecAsc(self.ThumbnailFrameIndex, 2, True),#which frame is in the thumbnnail
+			   self.OriginalAuthorName.encode("UTF-16LE") + "\0\0"*(11-len(self.OriginalAuthorName)),#Original Author Name
+			   self.EditorAuthorName.encode("UTF-16LE") + "\0\0"*(11-len(self.EditorAuthorName)),#Editor Author Name
+			   self.Username.encode("UTF-16LE") + "\0\0"*(11-len(self.Username)),#Username
 			   self.OriginalAuthorID.decode("HEX")[::-1],#OriginalAuthorID
 			   self.EditorAuthorID.decode("HEX")[::-1],#EditorAuthorID
 			   self.OriginalFilenameC,#OriginalFilename
 			   self.CurrentFilenameC,#CurrentFilename
 			   self.PreviousEditAuthorID.decode("HEX")[::-1],#EditorAuthorID
 			   self.PartialFilenameC,#PartialFilename
-		       DecAsc(self.Date, 4, True),#Date in seconds
-		       "\0\0",#padding
+			   DecAsc(self.Date, 4, True),#Date in seconds
+			   "\0\0",#padding
 			   self.PackThumbnail()]#thumbnail
 		
 		return "".join(out)
@@ -592,26 +592,26 @@ def WriteImage(image, outputPath):
 	return True
 
 def get_metadata(flipnote):
-        meta = {
-        u"Current filename":flipnote.CurrentFilename[:-3]+filetype,
-        u"Original filename":flipnote.OriginalFilename[:-3]+filetype,
-        u"Number of frames":flipnote.FrameCount,
-        u"Locked":flipnote.Locked,
-        u"Thumbnail frame index":(flipnote.ThumbnailFrameIndex+1),
-        u"Original author":flipnote.OriginalAuthorName,
-        u"Editor author":flipnote.EditorAuthorName,
-        u"Username":flipnote.Username,
-        u"Original author ID":flipnote.OriginalAuthorID,
-        u"Editor author ID":flipnote.EditorAuthorID,
-        u"Date(seconds since 1'st Jan 2000)":flipnote.Date,
-        u"Date":time.strftime("%H:%M %d/%m-%Y (faulty)", time.gmtime(epoch+flipnote.Date)),
-        }
-        if filetype == "ppm":
-                meta[u"Frame speed"]=flipnote.Framespeed
-                meta[u"Frame speed"]=flipnote.BGMFramespeed
-                meta[u"Looped"]=flipnote.Looped
-                
-        return meta
+	meta = {
+	u"Current filename":flipnote.CurrentFilename[:-3]+filetype,
+	u"Original filename":flipnote.OriginalFilename[:-3]+filetype,
+	u"Number of frames":flipnote.FrameCount,
+	u"Locked":flipnote.Locked,
+	u"Thumbnail frame index":(flipnote.ThumbnailFrameIndex+1),
+	u"Original author":flipnote.OriginalAuthorName,
+	u"Editor author":flipnote.EditorAuthorName,
+	u"Username":flipnote.Username,
+	u"Original author ID":flipnote.OriginalAuthorID,
+	u"Editor author ID":flipnote.EditorAuthorID,
+	u"Date(seconds since 1'st Jan 2000)":flipnote.Date,
+	u"Date":time.strftime("%H:%M %d/%m-%Y (faulty)", time.gmtime(epoch+flipnote.Date)),
+	}
+	if filetype == "ppm":
+		meta[u"Frame speed"]=flipnote.Framespeed
+		meta[u"Frame speed"]=flipnote.BGMFramespeed
+		meta[u"Looped"]=flipnote.Looped
+			
+	return meta
 
 
 if __name__ == '__main__':
@@ -765,23 +765,22 @@ if __name__ == '__main__':
 			f.write(newline.join(meta).encode("UTF-8"))
 			f.close()
 	elif sys.argv[1] == "-oa":
-                regex = re.compile(sys.argv[2])
-                os.chdir(sys.argv[3])
-                for filename in os.listdir("."):
-                        epoch = time.mktime(time.struct_time([2000, 1, 1, 0, 0, 0, 5, 1, -1]))
-                        
-                        if not os.path.isfile(filename):
-                                print "Error!\nSpecified file doesn't exist!"
-                                sys.exit()
-                        
-                        filetype = "ppm" if filename[-3:] == "ppm" else "tmb"
-                        flipnote = TMB().ReadFile(filename) if filetype == "tmb" else PPM().ReadFile(filename, ReadFrames=False)
-                        if not flipnote:
-                                continue
+		regex = re.compile(sys.argv[2])
+		os.chdir(sys.argv[3])
+		for filename in os.listdir("."):
+			epoch = time.mktime(time.struct_time([2000, 1, 1, 0, 0, 0, 5, 1, -1]))
+			if not os.path.isfile(filename):
+				print "Error!\nSpecified file doesn't exist!"
+				sys.exit()
+				
+			filetype = "ppm" if filename[-3:] == "ppm" else "tmb"
+			flipnote = TMB().ReadFile(filename) if filetype == "tmb" else PPM().ReadFile(filename, ReadFrames=False)
+			if not flipnote:
+				continue
 
-                        meta = get_metadata(flipnote)
-                        if regex.match(meta["Original author"]):
-                                print filename
-                        
+			meta = get_metadata(flipnote)
+			if regex.match(meta["Original author"]):
+				print filename
+						
 	else:
 		print "Error!\nThere's no such mode."
