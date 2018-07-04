@@ -605,6 +605,8 @@ def WriteImage(image, outputPath):
 	return True
 
 def get_metadata(flipnote):
+	epoch = time.mktime(time.struct_time([2000, 1, 1, 0, 0, 0, 5, 1, -1]))
+
 	meta = {
 	u"Current filename":flipnote.CurrentFilename[:-3]+filetype,
 	u"Original filename":flipnote.OriginalFilename[:-3]+filetype,
@@ -759,8 +761,6 @@ if __name__ == '__main__':
 		DumpSFXUsage(flipnote,sys.argv[3])
 		print "Done!"
 	elif sys.argv[1] == "-m":
-		epoch = time.mktime(time.struct_time([2000, 1, 1, 0, 0, 0, 5, 1, -1]))
-		
 		if not os.path.isfile(sys.argv[2]):
 			print "Error!\nSpecified file doesn't exist!"
 			sys.exit()
@@ -825,15 +825,32 @@ if __name__ == '__main__':
 
 		# Make temp dir and dump the frames and sound here
 		tempdir = tempfile.mkdtemp()
+		os.mkdir(tempdir+"/sounds")
 		print "Dumping the frames..."
 		DumpFrames(flipnote,tempdir)
 		print "Done!"
 		print "Dumping the sounds..."
-		DumpSoundFiles(flipnote,tempdir)
+		DumpSoundFiles(flipnote,tempdir+"/sounds")
 		print "Done!"
 		print "Dumping SFX usage..."
-		DumpSFXUsage(flipnote,tempdir)
+		DumpSFXUsage(flipnote,tempdir+"/sounds")
 		print "Done!"
+
+		# Now we need the metadata so we can look up the FPS
+		SPEEDS = [None,0.5,1,2,4,6,12,20,30]
+		print "Getting metadata..."
+		metadata = get_metadata(flipnote)
+		print "Done!"
+		speed = int(metadata["Frame speed"])
+		fps = SPEEDS[speed]
+		print "Flipnote is speed {speed}, so {fps} FPS".format(speed=speed,fps=fps)
+
+		# Now to make the video in ffmpeg
+		export_command = ["ffmpeg","-framerate",str(fps),"-start_number","1","-i","{path}/frame %03d.png".format(path=tempdir),"-i","{path}/sounds/BGM.wav".format(path=tempdir),"-c:v","libx264","-shortest",out_file]
+		if not os.path.isfile(tempdir+"/sounds/BGM.wav"):
+			export_command.pop(7)
+			export_command.pop(8)
+		subprocess.call(export_command)
 		
 	else:
 		print "Error!\nThere's no such mode."
