@@ -851,6 +851,11 @@ if __name__ == '__main__':
 			export_command.pop(7)
 			export_command.pop(8)
 		subprocess.call(export_command)
+
+		# Now I'll need to insert sound effects
+		# I can probably do this with ffmpeg by extending the audio with leading silence and using ffmpeg -i video.mkv -i gallop.ogg -filter_complex "[0:0][1:0] amix=inputs=2:duration=longest" main.ogg
+		# or at least something similar
+		# it'll need some experimentation. I'll have to do it another day.
 		
 	else:
 		print "Error!\nThere's no such mode."
