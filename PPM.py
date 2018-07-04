@@ -12,14 +12,26 @@
 #	- Jsafive for supplying .tmb files
 #	- Austin Burk, Midmad on hatena haiku and WDLmaster on hcs64.com for determining the sound codec
 #
-import sys, wave, audioop, re#needs os and time aswell in CMD mode
+import sys, wave, audioop, re, os #needs os and time aswell in CMD mode (UPDATE 2018/07/04: os used to get devnull for discarding subprocess output)
 import numpy as np
+import subprocess # used for ffmpeg
 try:
 	from PIL import Image
 	hasPIL = True
 except ImportError:
 	print "Warning: PIL not found, image extraction won't work!"
 	hasPIL = False
+# Test for ffmpeg by executing ffmpeg -h; an OSError indicates ffmpeg is not installed
+
+try:
+	with open(os.devnull,"w") as null:
+		subprocess.call(["ffmpeg","-h"],
+						stdout=null,
+						stderr=null)
+	hasffmpeg = True
+except OSError:
+	print "Warning: ffmpeg not found, video export unavailable. Please make sure ffmepg is installed and can be accessed on your path."
+	hasffmpeg = False
 
 #helpers:
 def AscDec(ascii, LittleEndian=False):#Converts a ascii string into a decimal
