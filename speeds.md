@@ -5,7 +5,7 @@ This is some reference material taken from http://flipnote.wikia.com/wiki/Flipno
 ## Flipnote Studio 3D ##
 
 |Speed|FPS|
-|:===:|:=:|
+|:---:|:-:|
 |0    |0.2|
 |1    |0.5|
 |2    |1  |
@@ -21,7 +21,7 @@ This is some reference material taken from http://flipnote.wikia.com/wiki/Flipno
 ## Flipnote Studio DSi ##
 
 |Speed|FPS|
-|:===:|:=:|
+|:---:|:-:|
 |1    |0.5|
 |2    |1  |
 |3    |2  |
