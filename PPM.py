@@ -122,12 +122,13 @@ ThumbPalette = (0xFEFEFEFF,#0
 #			To get a colored image of a frame, use instance.GetFrame()
 #	  - instance.SoundData: A list contaning the raw data of the BGM and the 3 sound effects. Only available if ReadSound was true set to true
 class PPM:
-	def __init__(self):
+	def __init__(self,forced_speed=None):
 		self.Loaded = [False, False, False]#(Meta, Frames, Sound)
 		self.Frames = None
 		self.Thumbnail = None
 		self.RawThumbnail = None
 		self.SoundData = None
+		self.forced_speed = forced_speed
 	def ReadFile(self, path, DecodeThumbnail=False, ReadFrames=True, ReadSound=False):#Load: (thumbnail, frames, sound)
 		f = open(path, "rb")
 		ret = self.Read(f.read(), DecodeThumbnail, ReadFrames, ReadSound)
@@ -181,8 +182,13 @@ class PPM:
 					AscDec(data[AddPadding(AudioOffset+self.FrameCount, 4)+ 4:AddPadding(AudioOffset+self.FrameCount, 4)+ 8], True),#SFX1
 					AscDec(data[AddPadding(AudioOffset+self.FrameCount, 4)+ 8:AddPadding(AudioOffset+self.FrameCount, 4)+12], True),#SFX2
 					AscDec(data[AddPadding(AudioOffset+self.FrameCount, 4)+12:AddPadding(AudioOffset+self.FrameCount, 4)+16], True))#SFX3
-		self.Framespeed    = 8 - ord(data[AddPadding(AudioOffset+self.FrameCount, 4) + 16])
+		if self.forced_speed == None:
+			self.Framespeed    = 8 - ord(data[AddPadding(AudioOffset+self.FrameCount, 4) + 16])
+		else:
+			self.Framespeed = self.forced_speed
 		self.BGMFramespeed = 8 - ord(data[AddPadding(AudioOffset+self.FrameCount, 4) + 17])#framespeed when the bgm was recorded
+		
+##            self.BGMFramespeed = self.forced_speed
 		
 		#Read the Frames:
 		if ReadFrames:
@@ -624,7 +630,7 @@ def get_metadata(flipnote):
 	}
 	if filetype == "ppm":
 		meta[u"Frame speed"]=flipnote.Framespeed
-		meta[u"Frame speed"]=flipnote.BGMFramespeed
+		meta[u"BGM Frame speed"]=flipnote.BGMFramespeed
 		meta[u"Looped"]=flipnote.Looped
 			
 	return meta
@@ -812,10 +818,15 @@ if __name__ == '__main__':
 		in_file = sys.argv[2]
 		out_file = sys.argv[3]
 		try:
-			sleep_time = int(sys.argv[4])
-		except IndexError,ValueError:
+			sleep_time = int(sys.argv[sys.argv.index("--sleep")+1])
+		except (IndexError,ValueError):
 			sleep_time = 0
 			print "Not sleeping."
+		try:
+			forced_speed = int(sys.argv[sys.argv.index("--speed")+1])
+			print "Using forced speed "+str(forced_speed)
+		except (IndexError,ValueError):
+			forced_speed = None
 			
 		if out_file.lower()[-4:] != ".mkv":
 			out_file += ".mkv"
@@ -831,7 +842,7 @@ if __name__ == '__main__':
 				print "Not overwriting; exiting."
 				sys.exit()
 		filetype = "ppm" if in_file[-3:].lower() == "ppm" else "tmb"
-		flipnote = TMB().ReadFile(in_file) if filetype == "tmb" else PPM().ReadFile(in_file, ReadFrames=True, ReadSound=True)
+		flipnote = TMB().ReadFile(in_file) if filetype == "tmb" else PPM(forced_speed).ReadFile(in_file, ReadFrames=True, ReadSound=True)
 
 		# Make temp dir and dump the frames and sound here
 		tempdir = tempfile.mkdtemp()
@@ -869,6 +880,20 @@ if __name__ == '__main__':
 			subprocess.call(export_command,stdout=null,stderr=null)
 		print "Done!"
 
+		# If the audio has been sped up, we have to do it again manually
+		bgm_speed = int(metadata["BGM Frame speed"])
+		if bgm_speed != speed:
+			print "Background music speed must be modified!"
+			original_rate = 8192
+			newrate = 8192*(float(fps)/SPEEDS[bgm_speed])
+			print "Using new rate: "+str(newrate)
+			speed_change_command = ["ffmpeg","-i","{path}/sounds/BGM.wav".format(path=tempdir),"-filter_complex","asetrate={rate}".format(rate=newrate),"-i",out_file,"-map","0:a","-map","1:v","-vcodec","copy","-acodec","pcm_s16le","{path}/temp_out.mkv".format(path=tempdir)]
+			with open(os.devnull,"w") as null:
+				subprocess.call(speed_change_command,stdout=null,stderr=null)
+			os.remove(out_file)
+			shutil.move("{path}/temp_out.mkv".format(path=tempdir),out_file)
+			print "Done!"
+			
 		# These are the ffmpeg commands I need for each sound effect
 		# The first generates a silent track, with variable length. This gets concatenated to the front of the sound effect.
 		silence_command = ["ffmpeg","-f","lavfi","-i","anullsrc=r=8192:cl=mono","-t","{length}","-f","wav","-y","{path}/silence.wav"]
