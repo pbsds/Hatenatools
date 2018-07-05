@@ -16,6 +16,7 @@ import sys, wave, audioop, re, os #needs os and time aswell in CMD mode (UPDATE 
 import numpy as np
 import subprocess # used for ffmpeg
 import tempfile, shutil # temporary directory whilst exporting, shutil to clean up after
+import time
 try:
 	from PIL import Image
 	hasPIL = True
@@ -805,8 +806,17 @@ if __name__ == '__main__':
 				print filename
 
 	elif sys.argv[1] == "-e":
+		if not hasffmpeg:
+			print "Error!\nffmpeg is not installed."
+			sys.exit()
 		in_file = sys.argv[2]
 		out_file = sys.argv[3]
+		try:
+			sleep_time = int(sys.argv[4])
+		except IndexError,ValueError:
+			sleep_time = 0
+			print "Not sleeping."
+			
 		if out_file.lower()[-4:] != ".mkv":
 			out_file += ".mkv"
 		if not os.path.isfile(in_file):
@@ -846,16 +856,55 @@ if __name__ == '__main__':
 		print "Flipnote is speed {speed}, so {fps} FPS".format(speed=speed,fps=fps)
 
 		# Now to make the video in ffmpeg
-		export_command = ["ffmpeg","-framerate",str(fps),"-start_number","1","-i","{path}/frame %03d.png".format(path=tempdir),"-i","{path}/sounds/BGM.wav".format(path=tempdir),"-c:v","libx264","-shortest",out_file]
+		print "Exporting video with ffmpeg..."
+		export_command = ["ffmpeg","-framerate",str(fps),"-start_number","1","-i","{path}/frame %03d.png".format(path=tempdir),"-i","{path}/sounds/BGM.wav".format(path=tempdir),"-c:v","libx264","-shortest","-y",out_file]
 		if not os.path.isfile(tempdir+"/sounds/BGM.wav"):
+			has_bgm = False
 			export_command.pop(7)
 			export_command.pop(8)
+		else:
+			has_bgm = True
 		subprocess.call(export_command)
+		print "Done!"
 
-		# Now I'll need to insert sound effects
-		# I can probably do this with ffmpeg by extending the audio with leading silence and using ffmpeg -i video.mkv -i gallop.ogg -filter_complex "[0:0][1:0] amix=inputs=2:duration=longest" main.ogg
-		# or at least something similar
-		# it'll need some experimentation. I'll have to do it another day.
-		
+		# These are the ffmpeg commands I need for each sound effect
+		# The first generates a silent track, with variable length. This gets concatenated to the front of the sound effect.
+		silence_command = ["ffmpeg","-f","lavfi","-i","anullsrc=r=8192:cl=mono","-t","{length}","-f","wav","-y","{path}/silence.wav"]
+		# The second concatenates the silent track and the sound effect, producing a sound file that can be mixed into the video's audio track so that it plays at the correct time.
+		SFX_command = ["ffmpeg","-i","{path}/silence.wav","-i","{path}/sounds/{sfx}.wav","-filter_complex","[0:a] [1:a] concat=n=2:v=0:a=1","-y","{path}/sfx.wav"]
+		# The third mixes the silence+sound effect into the video file
+		merge_command = ["ffmpeg","-i",out_file,"-i","{path}/sfx.wav","-filter_complex","[0:a][1:a] amix=inputs=2:duration=longest","-c:v","copy","-y",out_file]
+
+##        for sfx in ["SFX1","SFX2","SFX3"]:
+##            if not os.path.isfile("{path}/sounds/{sfx}.wav".format(path=tempdir,sfx=sfx)):
+##                print sfx+" does not exist."
+##                continue
+##            else:
+
+		# Read in the sound effect usage data
+		print "Reading in sound effect usage..."
+		with open("{path}/sounds/SFX usage.txt".format(path=tempdir),"r") as sfx_usage_file:
+			sfx_usage = sfx_usage_file.read().split("\n")
+		print "Done!"
+
+		# Iterate through the frames, checking if sound effects need to be added
+		for frame in range(len(sfx_usage)):
+			line = sfx_usage[frame]
+			# If a frame has an associated sound effect, get which sound effect to use
+			sfx = line.split(":")[1].strip() if line.strip() != "" else ""
+			if sfx != "": # If a sound effect must be played...
+				length = frame*fps
+				print "Adding "+sfx+" {length} seconds in.".format(length=length)
+				# ...run each command in series with the correct arguments
+				subprocess.call([i.format(path=tempdir,sfx=sfx,length=length) for i in silence_command])
+				subprocess.call([i.format(path=tempdir,sfx=sfx) for i in SFX_command])
+				subprocess.call([i.format(path=tempdir) for i in merge_command])
+				time.sleep(sleep_time) # optional sleep -- in case you want to slow things down for HDD strain or reliability or something
+
+		# Remove the temp dir and all files in it
+		print "Removing temporary directory..."
+		shutil.rmtree(tempdir)
+		print "Done!"
+			
 	else:
 		print "Error!\nThere's no such mode."
