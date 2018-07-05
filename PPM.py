@@ -895,7 +895,7 @@ if __name__ == '__main__':
 			# If a frame has an associated sound effect, get which sound effect to use
 			sfx = line.split(":")[1].strip() if line.strip() != "" else ""
 			if sfx != "": # If a sound effect must be played...
-				length = frame//fps
+				length = frame/float(fps)
 				print "Adding "+sfx+" at {length} seconds into the video.".format(length=length)
 				# ...run each command in series with the correct arguments
 				with open(os.devnull,"w") as null:
