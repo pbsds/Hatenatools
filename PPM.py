@@ -859,11 +859,12 @@ if __name__ == '__main__':
 		print "Exporting video with ffmpeg..."
 		export_command = ["ffmpeg","-framerate",str(fps),"-start_number","1","-i","{path}/frame %03d.png".format(path=tempdir),"-i","{path}/sounds/BGM.wav".format(path=tempdir),"-c:v","libx264","-shortest","-y",out_file]
 		if not os.path.isfile(tempdir+"/sounds/BGM.wav"):
-			has_bgm = False
-			export_command.pop(7)
-			export_command.pop(8)
+			print "No background music. Adding silent track..."
+			#has_bgm = False
+			export_command = ["ffmpeg","-framerate",str(fps),"-start_number","1","-i","{path}/frame %03d.png".format(path=tempdir),"-f","lavfi","-i","anullsrc=r=8192:cl=mono","-c:v","libx264","-shortest","-y",out_file]
 		else:
-			has_bgm = True
+			#has_bgm = True
+			pass
 		with open(os.devnull) as null:
 			subprocess.call(export_command,stdout=null,stderr=null)
 		print "Done!"
