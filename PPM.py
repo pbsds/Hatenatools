@@ -864,7 +864,8 @@ if __name__ == '__main__':
 			export_command.pop(8)
 		else:
 			has_bgm = True
-		subprocess.call(export_command)
+		with open(os.devnull) as null:
+			subprocess.call(export_command,stdout=null,stderr=null)
 		print "Done!"
 
 		# These are the ffmpeg commands I need for each sound effect
@@ -882,7 +883,7 @@ if __name__ == '__main__':
 ##            else:
 
 		# Read in the sound effect usage data
-		print "Reading in sound effect usage..."
+		print "Reading sound effect usage..."
 		with open("{path}/sounds/SFX usage.txt".format(path=tempdir),"r") as sfx_usage_file:
 			sfx_usage = sfx_usage_file.read().split("\n")
 		print "Done!"
@@ -894,11 +895,13 @@ if __name__ == '__main__':
 			sfx = line.split(":")[1].strip() if line.strip() != "" else ""
 			if sfx != "": # If a sound effect must be played...
 				length = frame*fps
-				print "Adding "+sfx+" {length} seconds in.".format(length=length)
+				print "Adding "+sfx+" at {length} seconds into the video.".format(length=length)
 				# ...run each command in series with the correct arguments
-				subprocess.call([i.format(path=tempdir,sfx=sfx,length=length) for i in silence_command])
-				subprocess.call([i.format(path=tempdir,sfx=sfx) for i in SFX_command])
-				subprocess.call([i.format(path=tempdir) for i in merge_command])
+				with open(os.devnull,"w") as null:
+					subprocess.call([i.format(path=tempdir,sfx=sfx,length=length) for i in silence_command],stdout=null,stderr=null)
+					subprocess.call([i.format(path=tempdir,sfx=sfx) for i in SFX_command],stdout=null,stderr=null)
+					subprocess.call([i.format(path=tempdir) for i in merge_command],stdout=null,stderr=null)
+				print "Done!"
 				time.sleep(sleep_time) # optional sleep -- in case you want to slow things down for HDD strain or reliability or something
 
 		# Remove the temp dir and all files in it
