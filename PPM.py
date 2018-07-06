@@ -868,11 +868,11 @@ if __name__ == '__main__':
 
 		# Now to make the video in ffmpeg
 		print "Exporting video with ffmpeg..."
-		export_command = ["ffmpeg","-framerate",str(fps),"-start_number","1","-i","{path}/frame %03d.png".format(path=tempdir),"-i","{path}/sounds/BGM.wav".format(path=tempdir),"-c:v","libx264","-c:a","pcm_s16le","-shortest","-y",out_file]
+		export_command = ["ffmpeg","-framerate",str(fps),"-start_number","1","-i","{path}/frame %03d.png".format(path=tempdir),"-i","{path}/sounds/BGM.wav".format(path=tempdir),"-c:v","libx264","-preset","veryslow","-c:a","pcm_s16le","-shortest","-y",out_file]
 		if not os.path.isfile(tempdir+"/sounds/BGM.wav"):
 			print "No background music. Adding silent track..."
 			#has_bgm = False
-			export_command = ["ffmpeg","-framerate",str(fps),"-start_number","1","-i","{path}/frame %03d.png".format(path=tempdir),"-f","lavfi","-i","anullsrc=r=8192:cl=mono","-c:v","libx264","-c:a","pcm_s16le","-shortest","-y",out_file]
+			export_command = ["ffmpeg","-framerate",str(fps),"-start_number","1","-i","{path}/frame %03d.png".format(path=tempdir),"-f","lavfi","-i","anullsrc=r=8192:cl=mono","-c:v","libx264","-preset","veryslow","-c:a","pcm_s16le","-shortest","-y",out_file]
 		else:
 			#has_bgm = True
 			pass
@@ -900,8 +900,9 @@ if __name__ == '__main__':
 		# The second concatenates the silent track and the sound effect, producing a sound file that can be mixed into the video's audio track so that it plays at the correct time.
 		SFX_command = ["ffmpeg","-i","{path}/silence.wav","-i","{path}/sounds/{sfx}.wav","-filter_complex","[0:a] [1:a] concat=n=2:v=0:a=1","-y","{path}/sfx.wav"]
 		# The third mixes the silence+sound effect into the video file
-		merge_command = ["ffmpeg","-i",out_file,"-i","{path}/sfx.wav","-filter_complex","[0:a][1:a] amix=inputs=2:duration=longest","-c:a","pcm_s16le","-c:v","copy","-y","{path}/temp_out.mkv"]
+		merge_command = ["ffmpeg","-i",out_file,"-i","{path}/sfx.wav","-filter_complex","[0:a][1:a] amix=inputs=2:duration=longest:dropout_transition={video_length},volume=2","-c:a","pcm_s16le","-c:v","copy","-max_muxing_queue_size","1024","-y","{path}/temp_out.mkv"]
 
+##        normalise_command = ["ffmpeg","-i",out_file,"-filter_complex","dynaudnorm","{path}/temp_out.mkv".format(path=tempdir)]
 ##        for sfx in ["SFX1","SFX2","SFX3"]:
 ##            if not os.path.isfile("{path}/sounds/{sfx}.wav".format(path=tempdir,sfx=sfx)):
 ##                print sfx+" does not exist."
@@ -926,11 +927,16 @@ if __name__ == '__main__':
 				with open(os.devnull,"w") as null:
 					subprocess.call([i.format(path=tempdir,sfx=sfx,length=length) for i in silence_command],stdout=null,stderr=null)
 					subprocess.call([i.format(path=tempdir,sfx=sfx) for i in SFX_command],stdout=null,stderr=null)
-					subprocess.call([i.format(path=tempdir) for i in merge_command],stdout=null,stderr=null)
-				os.remove(out_file)
-				shutil.move("{path}/temp_out.mkv".format(path=tempdir),out_file)
+					subprocess.call([i.format(path=tempdir,video_length=fps*len(sfx_usage)) for i in merge_command],stdout=null,stderr=null)
+					os.remove(out_file)
+					shutil.move("{path}/temp_out.mkv".format(path=tempdir),out_file)
 				print "Done!"
 				time.sleep(sleep_time) # optional sleep -- in case you want to slow things down for HDD strain or reliability or something
+
+##        subprocess.call(normalise_command)
+##        os.remove(out_file)
+##        shutil.move("{path}/temp_out.mkv".format(path=tempdir),out_file)
+				
 
 		# Remove the temp dir and all files in it
 		print "Removing temporary directory..."
