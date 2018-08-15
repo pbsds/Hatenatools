@@ -51,19 +51,19 @@ def DecAsc(dec, length=None, LittleEndian=False):#Converts a decimal into an asc
 def zipalign(length, r=4):
 	return length + (4 - length % r) if length % r else length
 def indentXML(elem, level=0):#"borrowed" from: http://effbot.org/zone/element-lib.htm#prettyprint
-    i = "\n" + level*"\t"
-    if len(elem):
-        if not elem.text or not elem.text.strip():
-            elem.text = i + "\t"
-        if not elem.tail or not elem.tail.strip():
-            elem.tail = i
-        for elem in elem:
-            indentXML(elem, level+1)
-        if not elem.tail or not elem.tail.strip():
-            elem.tail = i
-    else:
-        if level and (not elem.tail or not elem.tail.strip()):
-            elem.tail = i
+	i = "\n" + level*"\t"
+	if len(elem):
+		if not elem.text or not elem.text.strip():
+			elem.text = i + "\t"
+		if not elem.tail or not elem.tail.strip():
+			elem.tail = i
+		for elem in elem:
+			indentXML(elem, level+1)
+		if not elem.tail or not elem.tail.strip():
+			elem.tail = i
+	else:
+		if level and (not elem.tail or not elem.tail.strip()):
+			elem.tail = i
 
 #class UGO:
 class UGO:

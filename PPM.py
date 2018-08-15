@@ -12,14 +12,28 @@
 #	- Jsafive for supplying .tmb files
 #	- Austin Burk, Midmad on hatena haiku and WDLmaster on hcs64.com for determining the sound codec
 #
-import sys, wave, audioop, re#needs os and time aswell in CMD mode
+import sys, wave, audioop, re, os #needs os and time aswell in CMD mode (UPDATE 2018/07/04: os used to get devnull for discarding subprocess output)
 import numpy as np
+import subprocess # used for ffmpeg
+import tempfile, shutil # temporary directory whilst exporting, shutil to clean up after
+import time
 try:
 	from PIL import Image
 	hasPIL = True
 except ImportError:
 	print "Warning: PIL not found, image extraction won't work!"
 	hasPIL = False
+# Test for ffmpeg by executing ffmpeg -h; an OSError indicates ffmpeg is not installed
+
+try:
+	with open(os.devnull,"w") as null:
+		subprocess.call(["ffmpeg","-h"],
+						stdout=null,
+						stderr=null)
+	hasffmpeg = True
+except OSError:
+	print "Warning: ffmpeg not found, video export unavailable. Please make sure ffmepg is installed and can be accessed on your path."
+	hasffmpeg = False
 
 #helpers:
 def AscDec(ascii, LittleEndian=False):#Converts a ascii string into a decimal
@@ -108,12 +122,13 @@ ThumbPalette = (0xFEFEFEFF,#0
 #			To get a colored image of a frame, use instance.GetFrame()
 #	  - instance.SoundData: A list contaning the raw data of the BGM and the 3 sound effects. Only available if ReadSound was true set to true
 class PPM:
-	def __init__(self):
+	def __init__(self,forced_speed=None):
 		self.Loaded = [False, False, False]#(Meta, Frames, Sound)
 		self.Frames = None
 		self.Thumbnail = None
 		self.RawThumbnail = None
 		self.SoundData = None
+		self.forced_speed = forced_speed
 	def ReadFile(self, path, DecodeThumbnail=False, ReadFrames=True, ReadSound=False):#Load: (thumbnail, frames, sound)
 		f = open(path, "rb")
 		ret = self.Read(f.read(), DecodeThumbnail, ReadFrames, ReadSound)
@@ -167,8 +182,13 @@ class PPM:
 					AscDec(data[AddPadding(AudioOffset+self.FrameCount, 4)+ 4:AddPadding(AudioOffset+self.FrameCount, 4)+ 8], True),#SFX1
 					AscDec(data[AddPadding(AudioOffset+self.FrameCount, 4)+ 8:AddPadding(AudioOffset+self.FrameCount, 4)+12], True),#SFX2
 					AscDec(data[AddPadding(AudioOffset+self.FrameCount, 4)+12:AddPadding(AudioOffset+self.FrameCount, 4)+16], True))#SFX3
-		self.Framespeed    = 8 - ord(data[AddPadding(AudioOffset+self.FrameCount, 4) + 16])
+		if self.forced_speed == None:
+			self.Framespeed    = 8 - ord(data[AddPadding(AudioOffset+self.FrameCount, 4) + 16])
+		else:
+			self.Framespeed = self.forced_speed
 		self.BGMFramespeed = 8 - ord(data[AddPadding(AudioOffset+self.FrameCount, 4) + 17])#framespeed when the bgm was recorded
+		
+##            self.BGMFramespeed = self.forced_speed
 		
 		#Read the Frames:
 		if ReadFrames:
@@ -479,23 +499,23 @@ class TMB:
 		#if ppm: self = ppm
 		
 		out = ["PARA",#magic
-		       DecAsc(self.AudioOffset-0x6a0, 4, True),#animation data size
-		       DecAsc(self.AudioLenght, 4, True),#audio data size
-		       DecAsc(self.FrameCount-1, 2, True),#frame count
-		       "\x24\x00",#unknown
-		       chr(self.Locked), "\0",#locked
-		       DecAsc(self.ThumbnailFrameIndex, 2, True),#which frame is in the thumbnnail
-		       self.OriginalAuthorName.encode("UTF-16LE") + "\0\0"*(11-len(self.OriginalAuthorName)),#Original Author Name
-		       self.EditorAuthorName.encode("UTF-16LE") + "\0\0"*(11-len(self.EditorAuthorName)),#Editor Author Name
-		       self.Username.encode("UTF-16LE") + "\0\0"*(11-len(self.Username)),#Username
+			   DecAsc(self.AudioOffset-0x6a0, 4, True),#animation data size
+			   DecAsc(self.AudioLenght, 4, True),#audio data size
+			   DecAsc(self.FrameCount-1, 2, True),#frame count
+			   "\x24\x00",#unknown
+			   chr(self.Locked), "\0",#locked
+			   DecAsc(self.ThumbnailFrameIndex, 2, True),#which frame is in the thumbnnail
+			   self.OriginalAuthorName.encode("UTF-16LE") + "\0\0"*(11-len(self.OriginalAuthorName)),#Original Author Name
+			   self.EditorAuthorName.encode("UTF-16LE") + "\0\0"*(11-len(self.EditorAuthorName)),#Editor Author Name
+			   self.Username.encode("UTF-16LE") + "\0\0"*(11-len(self.Username)),#Username
 			   self.OriginalAuthorID.decode("HEX")[::-1],#OriginalAuthorID
 			   self.EditorAuthorID.decode("HEX")[::-1],#EditorAuthorID
 			   self.OriginalFilenameC,#OriginalFilename
 			   self.CurrentFilenameC,#CurrentFilename
 			   self.PreviousEditAuthorID.decode("HEX")[::-1],#EditorAuthorID
 			   self.PartialFilenameC,#PartialFilename
-		       DecAsc(self.Date, 4, True),#Date in seconds
-		       "\0\0",#padding
+			   DecAsc(self.Date, 4, True),#Date in seconds
+			   "\0\0",#padding
 			   self.PackThumbnail()]#thumbnail
 		
 		return "".join(out)
@@ -592,27 +612,49 @@ def WriteImage(image, outputPath):
 	return True
 
 def get_metadata(flipnote):
-        meta = {
-        u"Current filename":flipnote.CurrentFilename[:-3]+filetype,
-        u"Original filename":flipnote.OriginalFilename[:-3]+filetype,
-        u"Number of frames":flipnote.FrameCount,
-        u"Locked":flipnote.Locked,
-        u"Thumbnail frame index":(flipnote.ThumbnailFrameIndex+1),
-        u"Original author":flipnote.OriginalAuthorName,
-        u"Editor author":flipnote.EditorAuthorName,
-        u"Username":flipnote.Username,
-        u"Original author ID":flipnote.OriginalAuthorID,
-        u"Editor author ID":flipnote.EditorAuthorID,
-        u"Date(seconds since 1'st Jan 2000)":flipnote.Date,
-        u"Date":time.strftime("%H:%M %d/%m-%Y (faulty)", time.gmtime(epoch+flipnote.Date)),
-        }
-        if filetype == "ppm":
-                meta[u"Frame speed"]=flipnote.Framespeed
-                meta[u"Frame speed"]=flipnote.BGMFramespeed
-                meta[u"Looped"]=flipnote.Looped
-                
-        return meta
+	epoch = time.mktime(time.struct_time([2000, 1, 1, 0, 0, 0, 5, 1, -1]))
 
+	meta = {
+	u"Current filename":flipnote.CurrentFilename[:-3]+filetype,
+	u"Original filename":flipnote.OriginalFilename[:-3]+filetype,
+	u"Number of frames":flipnote.FrameCount,
+	u"Locked":flipnote.Locked,
+	u"Thumbnail frame index":(flipnote.ThumbnailFrameIndex+1),
+	u"Original author":flipnote.OriginalAuthorName,
+	u"Editor author":flipnote.EditorAuthorName,
+	u"Username":flipnote.Username,
+	u"Original author ID":flipnote.OriginalAuthorID,
+	u"Editor author ID":flipnote.EditorAuthorID,
+	u"Date(seconds since 1'st Jan 2000)":flipnote.Date,
+	u"Date":time.strftime("%H:%M %d/%m-%Y (faulty)", time.gmtime(epoch+flipnote.Date)),
+	}
+	if filetype == "ppm":
+		meta[u"Frame speed"]=flipnote.Framespeed
+		meta[u"BGM Frame speed"]=flipnote.BGMFramespeed
+		meta[u"Looped"]=flipnote.Looped
+			
+	return meta
+
+def DumpFrames(flipnote,directory):
+	for i in xrange(flipnote.FrameCount):
+		print "Dumping frame #%i..." % (i+1),
+		WriteImage(flipnote.GetFrame(i), os.path.join(directory, "frame %s.png" % str(i+1).zfill(3)))
+			
+def DumpSoundFiles(flipnote,directory,raw=False):
+	for i, data in enumerate(flipnote.SoundData):
+		if not data: continue
+		path = os.path.join(directory, ("BGM.wav", "SFX1.wav", "SFX2.wav", "SFX3.wav")[i])
+		flipnote.GetSound(i, path)
+		
+		if raw:
+			f = open(path[:-3]+"bin", "wb")
+			f.write(data)
+			f.close()
+
+def DumpSFXUsage(flipnote,directory):
+	with open(os.path.join(directory, "SFX usage.txt"), "w") as f:
+		for i, (s1, s2, s3) in enumerate(flipnote.SFXUsage):
+			f.write("Frame %i:%s%s%s\n" % (i, " SFX1"*s1, " SFX2"*s2, " SFX3"*s3))
 
 if __name__ == '__main__':
 	print "              ==      PPM.py      =="
@@ -629,6 +671,7 @@ if __name__ == '__main__':
 		print "          -f: Extracts the frame(s) to <Output>"
 		print "          -s: Dumps the sound files to the folder <Output>"
 		print "          -S: Same as mode -s, but will also dump the raw sound data files"
+		print "          -e: Exports the flipnote to an MKV"
 		print "          -m: Prints out the metadata. Can also write it to <output> which also"
 		print "              supports unicode charactes."
 		print "          -oa: Seach a directory for an original author that matches the RegEx"
@@ -679,11 +722,10 @@ if __name__ == '__main__':
 			if not os.path.isdir(sys.argv[3]):
 				print "Error!\nThe specified directory doesn't exist!"
 				sys.exit()
+
+			DumpFrames(flipnote,sys.argv[3])
 			
-			for i in xrange(flipnote.FrameCount):
-				print "Dumping frame #%i..." % (i+1),
-				WriteImage(flipnote.GetFrame(i), os.path.join(sys.argv[3], "frame %s.png" % str(i+1).zfill(3)))
-				print "Done!"
+			print "Done!"
 		else:
 			try:
 				int(sys.argv[4])
@@ -719,26 +761,13 @@ if __name__ == '__main__':
 			sys.exit()
 		
 		print "Converting the sound files...",
-		for i, data in enumerate(flipnote.SoundData):
-			if not data: continue
-			path = os.path.join(sys.argv[3], ("BGM.wav", "SFX1.wav", "SFX2.wav", "SFX3.wav")[i])
-			flipnote.GetSound(i, path)
-			
-			if sys.argv[1] == "-S":
-				f = open(path[:-3]+"bin", "wb")
-				f.write(data)
-				f.close()
+		DumpSoundFiles(flipnote,sys.argv[3],raw=(sys.argv[1]=="-S"))
 		print "Done!"
 		
 		print "Dumping the sound effect usage...",
-		f = open(os.path.join(sys.argv[3], "SFX usage.txt"), "w")
-		for i, (s1, s2, s3) in enumerate(flipnote.SFXUsage):
-			f.write("Frame %i:%s%s%s\n" % (i, " SFX1"*s1, " SFX2"*s2, " SFX3"*s3))
-		f.close()
+		DumpSFXUsage(flipnote,sys.argv[3])
 		print "Done!"
 	elif sys.argv[1] == "-m":
-		epoch = time.mktime(time.struct_time([2000, 1, 1, 0, 0, 0, 5, 1, -1]))
-		
 		if not os.path.isfile(sys.argv[2]):
 			print "Error!\nSpecified file doesn't exist!"
 			sys.exit()
@@ -765,23 +794,154 @@ if __name__ == '__main__':
 			f.write(newline.join(meta).encode("UTF-8"))
 			f.close()
 	elif sys.argv[1] == "-oa":
-                regex = re.compile(sys.argv[2])
-                os.chdir(sys.argv[3])
-                for filename in os.listdir("."):
-                        epoch = time.mktime(time.struct_time([2000, 1, 1, 0, 0, 0, 5, 1, -1]))
-                        
-                        if not os.path.isfile(filename):
-                                print "Error!\nSpecified file doesn't exist!"
-                                sys.exit()
-                        
-                        filetype = "ppm" if filename[-3:] == "ppm" else "tmb"
-                        flipnote = TMB().ReadFile(filename) if filetype == "tmb" else PPM().ReadFile(filename, ReadFrames=False)
-                        if not flipnote:
-                                continue
+		regex = re.compile(sys.argv[2])
+		os.chdir(sys.argv[3])
+		for filename in os.listdir("."):
+			epoch = time.mktime(time.struct_time([2000, 1, 1, 0, 0, 0, 5, 1, -1]))
+			if not os.path.isfile(filename):
+				print "Error!\nSpecified file doesn't exist!"
+				sys.exit()
+				
+			filetype = "ppm" if filename[-3:].lower() == "ppm" else "tmb"
+			flipnote = TMB().ReadFile(filename) if filetype == "tmb" else PPM().ReadFile(filename, ReadFrames=False)
+			if not flipnote:
+				continue
 
-                        meta = get_metadata(flipnote)
-                        if regex.match(meta["Original author"]):
-                                print filename
-                        
+			meta = get_metadata(flipnote)
+			if regex.match(meta["Original author"]):
+				print filename
+
+	elif sys.argv[1] == "-e":
+		if not hasffmpeg:
+			print "Error!\nffmpeg is not installed."
+			sys.exit()
+		in_file = sys.argv[2]
+		out_file = sys.argv[3]
+		try:
+			sleep_time = int(sys.argv[sys.argv.index("--sleep")+1])
+		except (IndexError,ValueError):
+			sleep_time = 0
+			print "Not sleeping."
+		try:
+			forced_speed = int(sys.argv[sys.argv.index("--speed")+1])
+			print "Using forced speed "+str(forced_speed)
+		except (IndexError,ValueError):
+			forced_speed = None
+			
+		if out_file.lower()[-4:] != ".mkv":
+			out_file += ".mkv"
+		if not os.path.isfile(in_file):
+			print "Error!\nSpecified file doesn't exist!"
+			sys.exit()
+		if os.path.isfile(out_file):
+			print "Overwrite existing file?"
+			overwrite = ""
+			while overwrite != "y" and overwrite != "n":
+				overwrite = raw_input("(Y/N) ").lower()
+			if overwrite == "n":
+				print "Not overwriting; exiting."
+				sys.exit()
+		filetype = "ppm" if in_file[-3:].lower() == "ppm" else "tmb"
+		flipnote = TMB().ReadFile(in_file) if filetype == "tmb" else PPM(forced_speed).ReadFile(in_file, ReadFrames=True, ReadSound=True)
+
+		# Make temp dir and dump the frames and sound here
+		tempdir = tempfile.mkdtemp()
+		os.mkdir(tempdir+"/sounds")
+		print "Dumping the frames..."
+		DumpFrames(flipnote,tempdir)
+		print "Done!"
+		print "Dumping the sounds..."
+		DumpSoundFiles(flipnote,tempdir+"/sounds")
+		print "Done!"
+		print "Dumping SFX usage..."
+		DumpSFXUsage(flipnote,tempdir+"/sounds")
+		print "Done!"
+
+		# Now we need the metadata so we can look up the FPS
+		SPEEDS = [None,0.5,1,2,4,6,12,20,30]
+		print "Getting metadata..."
+		metadata = get_metadata(flipnote)
+		print "Done!"
+		speed = int(metadata["Frame speed"])
+		fps = SPEEDS[speed]
+		print "Flipnote is speed {speed}, so {fps} FPS".format(speed=speed,fps=fps)
+
+		# Now to make the video in ffmpeg
+		print "Exporting video with ffmpeg..."
+		export_command = ["ffmpeg","-framerate",str(fps),"-start_number","1","-i","{path}/frame %03d.png".format(path=tempdir),"-i","{path}/sounds/BGM.wav".format(path=tempdir),"-c:v","libx264","-preset","veryslow","-c:a","pcm_s16le","-shortest","-y",out_file]
+		if not os.path.isfile(tempdir+"/sounds/BGM.wav"):
+			print "No background music. Adding silent track..."
+			#has_bgm = False
+			export_command = ["ffmpeg","-framerate",str(fps),"-start_number","1","-i","{path}/frame %03d.png".format(path=tempdir),"-f","lavfi","-i","anullsrc=r=8192:cl=mono","-c:v","libx264","-preset","veryslow","-c:a","pcm_s16le","-shortest","-y",out_file]
+		else:
+			#has_bgm = True
+			pass
+		with open(os.devnull) as null:
+			subprocess.call(export_command,stdout=null,stderr=null)
+		print "Done!"
+
+		# If the audio has been sped up, we have to do it again manually
+		bgm_speed = int(metadata["BGM Frame speed"])
+		if bgm_speed != speed:
+			print "Background music speed must be modified!"
+			original_rate = 8192
+			newrate = 8192*(float(fps)/SPEEDS[bgm_speed])
+			print "Using new rate: "+str(newrate)
+			speed_change_command = ["ffmpeg","-i","{path}/sounds/BGM.wav".format(path=tempdir),"-filter_complex","asetrate={rate}".format(rate=newrate),"-i",out_file,"-map","0:a","-map","1:v","-vcodec","copy","-acodec","pcm_s16le","{path}/temp_out.mkv".format(path=tempdir)]
+			with open(os.devnull,"w") as null:
+				subprocess.call(speed_change_command,stdout=null,stderr=null)
+			os.remove(out_file)
+			shutil.move("{path}/temp_out.mkv".format(path=tempdir),out_file)
+			print "Done!"
+			
+		# These are the ffmpeg commands I need for each sound effect
+		# The first generates a silent track, with variable length. This gets concatenated to the front of the sound effect.
+		silence_command = ["ffmpeg","-f","lavfi","-i","anullsrc=r=8192:cl=mono","-t","{length}","-f","wav","-y","{path}/silence.wav"]
+		# The second concatenates the silent track and the sound effect, producing a sound file that can be mixed into the video's audio track so that it plays at the correct time.
+		SFX_command = ["ffmpeg","-i","{path}/silence.wav","-i","{path}/sounds/{sfx}.wav","-filter_complex","[0:a] [1:a] concat=n=2:v=0:a=1","-y","{path}/sfx.wav"]
+		# The third mixes the silence+sound effect into the video file
+		merge_command = ["ffmpeg","-i",out_file,"-i","{path}/sfx.wav","-filter_complex","[0:a][1:a] amix=inputs=2:duration=longest:dropout_transition={video_length},volume=2","-c:a","pcm_s16le","-c:v","copy","-max_muxing_queue_size","1024","-y","{path}/temp_out.mkv"]
+
+##        normalise_command = ["ffmpeg","-i",out_file,"-filter_complex","dynaudnorm","{path}/temp_out.mkv".format(path=tempdir)]
+##        for sfx in ["SFX1","SFX2","SFX3"]:
+##            if not os.path.isfile("{path}/sounds/{sfx}.wav".format(path=tempdir,sfx=sfx)):
+##                print sfx+" does not exist."
+##                continue
+##            else:
+
+		# Read in the sound effect usage data
+		print "Reading sound effect usage..."
+		with open("{path}/sounds/SFX usage.txt".format(path=tempdir),"r") as sfx_usage_file:
+			sfx_usage = sfx_usage_file.read().split("\n")
+		print "Done!"
+
+		# Iterate through the frames, checking if sound effects need to be added
+		for frame in range(len(sfx_usage)):
+			line = sfx_usage[frame]
+			# If a frame has an associated sound effect, get which sound effect to use
+			sfx = line.split(":")[1].strip() if line.strip() != "" else ""
+			if sfx != "": # If a sound effect must be played...
+				length = frame/float(fps)
+				print "Adding "+sfx+" at {length} seconds into the video.".format(length=length)
+				# ...run each command in series with the correct arguments
+				with open(os.devnull,"w") as null:
+					subprocess.call([i.format(path=tempdir,sfx=sfx,length=length) for i in silence_command],stdout=null,stderr=null)
+					subprocess.call([i.format(path=tempdir,sfx=sfx) for i in SFX_command],stdout=null,stderr=null)
+					subprocess.call([i.format(path=tempdir,video_length=fps*len(sfx_usage)) for i in merge_command],stdout=null,stderr=null)
+					os.remove(out_file)
+					shutil.move("{path}/temp_out.mkv".format(path=tempdir),out_file)
+				print "Done!"
+				time.sleep(sleep_time) # optional sleep -- in case you want to slow things down for HDD strain or reliability or something
+
+##        subprocess.call(normalise_command)
+##        os.remove(out_file)
+##        shutil.move("{path}/temp_out.mkv".format(path=tempdir),out_file)
+				
+
+		# Remove the temp dir and all files in it
+		print "Removing temporary directory..."
+		shutil.rmtree(tempdir)
+		print "Done!"
+			
 	else:
 		print "Error!\nThere's no such mode."
