@@ -2,10 +2,10 @@
   ==            By pbsds           ==  
   ==  aka Peder Bergebakken Sundt  ==  
 
-(with some additions from WORD559)
+ with video-encode additions by WORD559
 
 --VERSIONS--
-PPM.py:         v1.4
+PPM.py:         v1.5
 UGO.py:         v0.93
 NTFT.py:        v0.95
 
@@ -35,3 +35,4 @@ See License.txt or http://www.gnu.org/licenses/agpl-3.0.html for more informatio
 -Remark for helping me understanding the 8x8 tiling on the preview images.
 -JSAfive for supplying .tmb and .ugo files
 -Austin Burk, Midmad on hatena haiku and WDLmaster on hcs64.com for determining the sound codec
+-jaames, for proper p-frame translation

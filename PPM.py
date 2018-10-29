@@ -319,13 +319,12 @@ class PPM:
 		#WIP - framemove:
 		FrameMove = [0,0]
 		if Unknown & 0x2:#doesn't work 100%...
-			print "Unknown tags:", Unknown, "(FrameMove) at offset ",offset-1
+			print "FrameMove at offset ",offset-1
 			
-			move = AscDec(data[offset:offset+2], True)
-			if move > 128:
-				FrameMove[0] = move - 256
-			else:
-				FrameMove[1] = 0-move
+			move_x = AscDec(data[offset+0:offset+1], True)
+			move_y = AscDec(data[offset+1:offset+2], True)
+			FrameMove[0] = move_x if move_x <= 127 else move_x-256
+			FrameMove[1] = move_y if move_y <= 127 else move_y-256
 			offset += 2
 		elif Unknown:
 			print "Unknown tags:",Unknown,"at offset ",offset-1
