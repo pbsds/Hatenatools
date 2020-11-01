@@ -589,24 +589,25 @@ class TMB:
 #	Designed to work with PPM().Thumbnail or PPM().GetFrame(n)
 #
 #	This function requires the PIl imaging module
-def WriteImage(image, outputPath):
+def WriteImage(image, outputPath, scale=1):
 	if not hasPIL:
 		print "Error: PIL not found!"
 		return False
 	#if not image: return False
-	
-	out = image.tostring("F")
-	
-	# out = []
-	# for y in xrange(len(image[0])):
-		# for x in xrange(len(image)):
-			# out.append(DecAsc(image[x][y], 4))
-	
-	out = Image.frombytes("RGBA", (len(image), len(image[0])), out)
+
+	#	Upscale the image by the scale factor so each original pixel is
+	#	represented by a n-by-n-pixel square in the larger version.
+	#	Any number 1 or smaller is just treated as a scale factor of 1.
+	if scale > 1:
+		newImg = np.repeat(np.repeat(image, scale, axis = 0), scale, axis = 1)
+	else:
+		newImg = image
+
+	out = newImg.tostring("F")	
+	out = Image.frombytes("RGBA", (len(newImg), len(newImg[0])), out)
 	
 	filetype = outputPath[outputPath.rfind(".")+1:]
 	out.save(outputPath, filetype)
-	
 	
 	return True
 
@@ -634,10 +635,10 @@ def get_metadata(flipnote):
 			
 	return meta
 
-def DumpFrames(flipnote,directory):
+def DumpFrames(flipnote,directory,scale=1):
 	for i in xrange(flipnote.FrameCount):
-		print "Dumping frame #%i..." % (i+1),
-		WriteImage(flipnote.GetFrame(i), os.path.join(directory, "frame %s.png" % str(i+1).zfill(3)))
+		print "Dumping frame #%i of %i..." % (i+1, flipnote.FrameCount)
+		WriteImage(flipnote.GetFrame(i), os.path.join(directory, "frame %s.png" % str(i+1).zfill(3)), scale)
 			
 def DumpSoundFiles(flipnote,directory,raw=False):
 	for i, data in enumerate(flipnote.SoundData):
@@ -663,7 +664,7 @@ if __name__ == '__main__':
 	
 	if len(sys.argv) < 3:
 		print "Usage:"
-		print "      PPM.py <Mode> <Input> [<Output>] [<Frame>]"
+		print "      PPM.py <Mode> <Input> [<Output>] [<Frame>] [<Option>]"
 		print ""
 		print "      <Mode>:"
 		print "          -t: Extracts the thumbnail to the file <Output>"
@@ -680,12 +681,17 @@ if __name__ == '__main__':
 		print "          Set this to the exact frame you want to extract(starting at 1) and it"
 		print "          will be saved as a file to <Output>."
 		print "          If not specified, it will extract all frames to the folder <Output>"
+		print "      <Option>"
+		print "          --speed N: Only used in mode -e. Set this to force a specific"
+		print "                     flipnote speed (1 to 8)."
+		print "          --scale N: Only used in modes -e and -f. Set this to upscale the"
+		print "                     frames N times."
 		
 		sys.exit()
 	
 	import os, time
 	
-	if sys.argv[1]   == "-t":
+	if sys.argv[1] == "-t":
 		print "Reading the flipnote file...",
 		if not os.path.isfile(sys.argv[2]):
 			print "Error!\nSpecified file doesn't exist!"
@@ -705,6 +711,12 @@ if __name__ == '__main__':
 			print "Error!"
 			print "<Output> not specified!"
 			sys.exit()
+
+		try:
+			scale = int(sys.argv[sys.argv.index("--scale")+1])
+			print "Using frame scaling "+str(scale)
+		except (IndexError,ValueError):
+			scale = 1
 		
 		print "Reading the flipnote file...",
 		if not os.path.isfile(sys.argv[2]):
@@ -722,7 +734,7 @@ if __name__ == '__main__':
 				print "Error!\nThe specified directory doesn't exist!"
 				sys.exit()
 
-			DumpFrames(flipnote,sys.argv[3])
+			DumpFrames(flipnote,sys.argv[3], scale)
 			
 			print "Done!"
 		else:
@@ -737,7 +749,7 @@ if __name__ == '__main__':
 				sys.exit()
 			
 			print "Dumping frame #%i..." % int(sys.argv[4]),
-			WriteImage(flipnote.GetFrame(int(sys.argv[4])-1), sys.argv[3])
+			WriteImage(flipnote.GetFrame(int(sys.argv[4])-1), sys.argv[3], scale)
 			print "Done!"
 	elif sys.argv[1] in ("-s", "-S"):
 		if len(sys.argv) < 4:
@@ -826,6 +838,11 @@ if __name__ == '__main__':
 			print "Using forced speed "+str(forced_speed)
 		except (IndexError,ValueError):
 			forced_speed = None
+		try:
+			scale = int(sys.argv[sys.argv.index("--scale")+1])
+			print "Using frame scaling "+str(scale)
+		except (IndexError,ValueError):
+			scale = 1
 			
 		if out_file.lower()[-4:] != ".mkv":
 			out_file += ".mkv"
@@ -847,7 +864,7 @@ if __name__ == '__main__':
 		tempdir = tempfile.mkdtemp()
 		os.mkdir(tempdir+"/sounds")
 		print "Dumping the frames..."
-		DumpFrames(flipnote,tempdir)
+		DumpFrames(flipnote,tempdir,scale)
 		print "Done!"
 		print "Dumping the sounds..."
 		DumpSoundFiles(flipnote,tempdir+"/sounds")
