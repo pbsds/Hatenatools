@@ -83,7 +83,10 @@ ThumbPalette = (0xFEFEFEFF,#0
 				0x00FF00FF,#D-
 				0x00FF00FF,#E-
 				0x00FF00FF)#F-
-	
+
+SPEEDS = [None,0.5,1,2,4,6,12,20,30]
+
+
 #Class PPM:
 #
 #	With this class you can read a Flipnote PPM file into memory and get its attributes.
@@ -270,7 +273,7 @@ class PPM:
 			
 			self.Thumbnail = out
 		return self.Thumbnail
-	def GetSound(self, index, outputpath=None):#index 0 is BGM. 1, 2 and 3 is SFX. if outputpath is None, the raw mono PCM @ 8184Hz is returned instead
+	def GetSound(self, index, outputpath=None, zero_pad=True):#index 0 is BGM. 1, 2 and 3 is SFX. if outputpath is None, the raw mono PCM @ 8184Hz is returned instead
 		if self.Loaded[2]:
 			if self.SoundData[index]:
 				#reverse nibbles:
@@ -281,7 +284,11 @@ class PPM:
 				
 				#4bit ADPCM decode
 				decoded = audioop.adpcm2lin(data, 2, None)[0]
-				
+
+				samples_min = 8192*2 * self.FrameCount * SPEEDS[self.BGMFramespeed]
+				if len(decoded) < samples_min and index==0:
+					decoded += "\0" * (samples_min - len(decoded))
+
 				#write to wav:
 				if outputpath:
 					f = wave.open(outputpath, "wb")
@@ -874,7 +881,6 @@ if __name__ == '__main__':
 		print "Done!"
 
 		# Now we need the metadata so we can look up the FPS
-		SPEEDS = [None,0.5,1,2,4,6,12,20,30]
 		print "Getting metadata..."
 		metadata = get_metadata(flipnote)
 		print "Done!"
