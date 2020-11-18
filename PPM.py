@@ -880,11 +880,12 @@ if __name__ == '__main__':
 		print "Done!"
 		speed = int(metadata["Frame speed"])
 		fps = SPEEDS[speed]
-		print "Flipnote is speed {speed}, so {fps} FPS".format(speed=speed,fps=fps)
+		duration = float(metadata["Number of frames"])/float(fps)
+		print "Flipnote is speed {speed}, so {fps} FPS for {dur} seconds".format(speed=speed,fps=fps,dur=duration)
 
 		# Now to make the video in ffmpeg
 		print "Exporting video with ffmpeg..."
-		export_command = ["ffmpeg","-framerate",str(fps),"-start_number","1","-i","{path}/frame %03d.png".format(path=tempdir),"-i","{path}/sounds/BGM.wav".format(path=tempdir),"-c:v","libx264","-preset","veryslow","-c:a","pcm_s16le","-shortest","-y",out_file]
+		export_command = ["ffmpeg","-framerate",str(fps),"-start_number","1","-i","{path}/frame %03d.png".format(path=tempdir),"-i","{path}/sounds/BGM.wav".format(path=tempdir),"-c:v","libx264","-preset","veryslow","-c:a","pcm_s16le","-t","{dur}".format(dur=duration),"-y",out_file]
 		if not os.path.isfile(tempdir+"/sounds/BGM.wav"):
 			print "No background music. Adding silent track..."
 			#has_bgm = False
