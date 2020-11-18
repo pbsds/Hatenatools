@@ -2,7 +2,6 @@
   ==            By pbsds           ==  
   ==  aka Peder Bergebakken Sundt  ==  
 
- with video-encode additions by WORD559
 
 --VERSIONS--
 PPM.py:         v1.5
@@ -36,3 +35,5 @@ See License.txt or http://www.gnu.org/licenses/agpl-3.0.html for more informatio
 -JSAfive for supplying .tmb and .ugo files
 -Austin Burk, Midmad on hatena haiku and WDLmaster on hcs64.com for determining the sound codec
 -jaames, for proper p-frame translation
+-WORD559, for video export with ffmpeg
+-wyntrr-end, for proper ffmpeg export duration and frame scaling
