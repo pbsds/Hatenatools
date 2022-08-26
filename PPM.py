@@ -896,14 +896,14 @@ if __name__ == '__main__':
 			pass
 		# use libx265 in lossless mode, rather than MPNG
 		if sys.argv[1] == "-E":
-                        # insert the necessary arguments into the existing command
-                        codec_index = export_command.index("-c:v")
-                        export_command[codec_index+1] = "libx265"
-                        export_command.insert(codec_index+2, "-x265-params")
-                        export_command.insert(codec_index+3, "lossless=1")
-                        export_command.insert(codec_index+2, "-preset")
-                        export_command.insert(codec_index+3, "veryslow")
-                print " ".join(export_command)
+			# insert the necessary arguments into the existing command
+			codec_index = export_command.index("-c:v")
+			export_command[codec_index+1] = "libx265"
+			export_command.insert(codec_index+2, "-x265-params")
+			export_command.insert(codec_index+3, "lossless=1")
+			export_command.insert(codec_index+2, "-preset")
+			export_command.insert(codec_index+3, "veryslow")
+		print " ".join(export_command)
 		with open(os.devnull) as null:
 			subprocess.call(export_command,stdout=null,stderr=null)
 		print "Done!"
