@@ -671,7 +671,8 @@ if __name__ == '__main__':
 		print "          -f: Extracts the frame(s) to <Output>"
 		print "          -s: Dumps the sound files to the folder <Output>"
 		print "          -S: Same as mode -s, but will also dump the raw sound data files"
-		print "          -e: Exports the flipnote to an MKV"
+		print "          -e: Exports the flipnote to an MKV with minimal transcoding"
+		print "          -E: Same as -e, but will encode the video as lossless H.265"
 		print "          -m: Prints out the metadata. Can also write it to <output> which also"
 		print "              supports unicode charactes."
 		print "          -oa: Seach a directory for an original author that matches the RegEx"
@@ -822,7 +823,7 @@ if __name__ == '__main__':
 			if regex.match(meta["Original author"]):
 				print filename
 
-	elif sys.argv[1] == "-e":
+	elif sys.argv[1] == "-e" or sys.argv[1] == "-E":
 		if not hasffmpeg:
 			print "Error!\nffmpeg is not installed."
 			sys.exit()
@@ -885,14 +886,24 @@ if __name__ == '__main__':
 
 		# Now to make the video in ffmpeg
 		print "Exporting video with ffmpeg..."
-		export_command = ["ffmpeg","-framerate",str(fps),"-start_number","1","-i","{path}/frame %03d.png".format(path=tempdir),"-i","{path}/sounds/BGM.wav".format(path=tempdir),"-c:v","libx264","-preset","veryslow","-c:a","pcm_s16le","-t","{dur}".format(dur=duration),"-y",out_file]
+		export_command = ["ffmpeg","-framerate",str(fps),"-start_number","1","-i","{path}/frame %03d.png".format(path=tempdir),"-i","{path}/sounds/BGM.wav".format(path=tempdir),"-c:v","copy","-c:a","copy","-t","{dur}".format(dur=duration),"-y",out_file]
 		if not os.path.isfile(tempdir+"/sounds/BGM.wav"):
 			print "No background music. Adding silent track..."
 			#has_bgm = False
-			export_command = ["ffmpeg","-framerate",str(fps),"-start_number","1","-i","{path}/frame %03d.png".format(path=tempdir),"-f","lavfi","-i","anullsrc=r=8192:cl=mono","-c:v","libx264","-preset","veryslow","-c:a","pcm_s16le","-shortest","-y",out_file]
+			export_command = ["ffmpeg","-framerate",str(fps),"-start_number","1","-i","{path}/frame %03d.png".format(path=tempdir),"-f","lavfi","-i","anullsrc=r=8192:cl=mono","-c:v","copy","-c:a","pcm_s16le","-shortest","-y",out_file]
 		else:
 			#has_bgm = True
 			pass
+		# use libx265 in lossless mode, rather than MPNG
+		if sys.argv[1] == "-E":
+			# insert the necessary arguments into the existing command
+			codec_index = export_command.index("-c:v")
+			export_command[codec_index+1] = "libx265"
+			export_command.insert(codec_index+2, "-x265-params")
+			export_command.insert(codec_index+3, "lossless=1")
+			export_command.insert(codec_index+2, "-preset")
+			export_command.insert(codec_index+3, "veryslow")
+		print " ".join(export_command)
 		with open(os.devnull) as null:
 			subprocess.call(export_command,stdout=null,stderr=null)
 		print "Done!"
